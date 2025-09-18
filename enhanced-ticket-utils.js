@@ -550,27 +550,34 @@ async function sendWhatsAppTicket(phone, ticket) {
     // Then send the PDF file if available
     if (ticket.path) {
       console.log('📄 Sending PDF ticket...');
+      console.log('🔍 Debug ticket object:', {
+        path: ticket.path,
+        localPath: ticket.localPath,
+        ticketId: ticket.ticketId
+      });
       
       // Verify PDF file exists locally before sending
       if (ticket.localPath && !fs.existsSync(ticket.localPath)) {
         console.error('❌ PDF file does not exist locally:', ticket.localPath);
-        return {
-          success: false,
-          error: 'PDF file not found locally',
-          provider: 'Green API',
-          details: `Local file not found: ${ticket.localPath}`
-        };
+        console.log('🔍 File system check failed, but continuing with URL-based delivery...');
+        // Don't return error, continue with URL-based delivery
       }
       
       // Check PDF file size (WhatsApp limit is ~16MB, but we'll use 5MB for safety)
-      if (ticket.localPath) {
-        const stats = fs.statSync(ticket.localPath);
-        const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
-        console.log(`📊 PDF file size: ${fileSizeMB} MB`);
-        
-        if (stats.size > 5 * 1024 * 1024) { // 5MB limit
-          console.warn(`⚠️ PDF file size (${fileSizeMB} MB) exceeds recommended limit for WhatsApp`);
+      if (ticket.localPath && fs.existsSync(ticket.localPath)) {
+        try {
+          const stats = fs.statSync(ticket.localPath);
+          const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
+          console.log(`📊 PDF file size: ${fileSizeMB} MB`);
+          
+          if (stats.size > 5 * 1024 * 1024) { // 5MB limit
+            console.warn(`⚠️ PDF file size (${fileSizeMB} MB) exceeds recommended limit for WhatsApp`);
+          }
+        } catch (error) {
+          console.warn('⚠️ Could not check file size, continuing with URL-based delivery:', error.message);
         }
+      } else {
+        console.log('📊 File size check skipped (file not accessible locally)');
       }
       
       // Construct full public URL for the PDF using direct endpoint (Railway static routes don't work)
