@@ -580,10 +580,22 @@ async function sendWhatsAppTicket(phone, ticket) {
         console.log('📊 File size check skipped (file not accessible locally)');
       }
       
-      // Construct full public URL for the PDF using direct endpoint (Railway static routes don't work)
-      const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://upbeat-compassion-production.up.railway.app';
-      const filename = ticket.path.split('/').pop(); // Extract filename from /tickets/filename.pdf
-      const publicPdfUrl = `${baseUrl}/pdf/${filename}`;
+      // Safe absolute URL builder for GreenAPI
+      function buildPublicPdfUrl(ticket) {
+        const base = (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PUBLIC_BASE_URL || 'https://upbeat-compassion-production.up.railway.app').replace(/\/$/, '');
+        const rel = ticket.path || ticket.pdfPath || (`/tickets/${ticket.ticketId}.pdf`);
+        const path = rel.startsWith('/') ? rel : `/${rel}`;
+        const url = `${base}${path}`;
+        return url;
+      }
+      
+      const publicPdfUrl = buildPublicPdfUrl(ticket);
+      
+      // Defensive: ensure it starts with http
+      if (!/^https?:\/\//.test(publicPdfUrl)) {
+        console.error('❌ Public PDF URL invalid:', publicPdfUrl);
+        throw new Error(`Invalid PDF URL format: ${publicPdfUrl}`);
+      }
       
       console.log('🌐 Public PDF URL (direct endpoint):', publicPdfUrl);
       console.log('📁 Local PDF path:', ticket.localPath);
@@ -620,15 +632,7 @@ async function sendWhatsAppTicket(phone, ticket) {
         }
         
       } catch (error) {
-        console.error('❌ Public PDF URL accessibility check failed:', error.message);
-        console.error('🔍 URL details:', {
-          url: publicPdfUrl,
-          status: error.response?.status,
-          headers: error.response?.headers
-        });
-        
-        // Don't fail the entire process, just log the warning and continue
-        console.warn('⚠️ URL accessibility check failed, but continuing with PDF delivery...');
+        console.warn('⚠️ PDF HEAD failed, will still attempt send. Error:', error.message);
         console.warn('🔗 PDF URL will be sent to Green API:', publicPdfUrl);
       }
       
