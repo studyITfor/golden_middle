@@ -1,4 +1,4 @@
-// Enhanced ticket generation utilities for GoldenMiddle - FIXED VERSION
+// Enhanced ticket generation utilities for GoldenMiddle
 const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
@@ -21,57 +21,24 @@ if (SUPABASE_URL && SUPABASE_KEY) {
   supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
   console.log('✅ Supabase client initialized for ticket storage');
 } else {
-  console.log('⚠️ Supabase credentials not found, using Railway public storage fallback');
+  console.log('⚠️ Supabase credentials not found, using local storage fallback');
 }
 
-// Generate a unique ticket ID
-function generateTicketId() {
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-  return `TM${timestamp}${random}`;
-}
-
-// Extract and normalize booking data
-function extractBookingData(booking) {
-  const firstName = booking.first_name || booking.firstName || 'Guest';
-  const lastName = booking.last_name || booking.lastName || '';
-  const fullName = lastName ? `${firstName} ${lastName}`.trim() : firstName;
-  const table = booking.table_number || booking.table || 'N/A';
-  const seat = booking.seat_number || booking.seat || 'N/A';
-  const ticketId = booking.ticket_id || booking.ticketId || generateTicketId();
-  const phone = booking.user_phone || booking.phone || 'N/A';
-
-  return {
-    firstName,
-    lastName,
-    fullName,
-    table,
-    seat,
-    ticketId,
-    phone
-  };
-}
-
-// Generate ticket using PDF/PNG template with real booking data
+// Generate ticket using PDF/PNG template with placeholder replacement
 async function generateTicketFromTemplate(booking, templatePath, outputPath) {
+  console.log('🎫 Generating ticket from template:', { templatePath, outputPath });
+  
   try {
     // Check if template exists
     if (!fs.existsSync(templatePath)) {
       throw new Error(`Template file not found: ${templatePath}`);
     }
 
-    // Extract real booking data
-    const data = extractBookingData(booking);
-    console.log('📋 Using real booking data:', { 
-      fullName: data.fullName, 
-      table: data.table, 
-      seat: data.seat, 
-      ticketId: data.ticketId 
-    });
-
     // Determine template type
     const templateExt = path.extname(templatePath).toLowerCase();
     const isPngTemplate = templateExt === '.png';
+    
+    console.log(`📄 Loading template ${isPngTemplate ? 'PNG' : 'PDF'}...`);
     
     let pdfDoc;
     let firstPage;
@@ -83,11 +50,13 @@ async function generateTicketFromTemplate(booking, templatePath, outputPath) {
       const templateBytes = fs.readFileSync(templatePath);
       const pngImage = await pdfDoc.embedPng(templateBytes);
       
+      // Create page with PNG dimensions
       const { width: imgWidth, height: imgHeight } = pngImage;
       firstPage = pdfDoc.addPage([imgWidth, imgHeight]);
       width = imgWidth;
       height = imgHeight;
       
+      // Draw PNG as background
       firstPage.drawImage(pngImage, {
         x: 0,
         y: 0,
@@ -109,39 +78,85 @@ async function generateTicketFromTemplate(booking, templatePath, outputPath) {
       width = size.width;
       height = size.height;
     }
+    
+    console.log('📐 Page dimensions:', { width, height });
 
-    // Embed fonts
+    // Extract real booking data for proper personalization
+    const firstName = booking.first_name || booking.firstName || 'Guest';
+    const lastName = booking.last_name || booking.lastName || '';
+    const fullName = lastName ? `${firstName} ${lastName}` : firstName;
+    const table = booking.table_number || booking.table || 'N/A';
+    const seat = booking.seat_number || booking.seat || 'N/A';
+    const ticketId = booking.ticket_id || booking.ticketId || 'N/A';
+
+    console.log('✏️ Using real booking data:', { fullName, table, seat, ticketId });
+
+    // Embed fonts for text overlay
     const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    // Generate English text for PDF compatibility
-    const ticketText = `Hello, ${data.fullName}!
-
-Your golden ticket for GOLDENMIDDLE is ready!
-
-Date: 26 October 2025
-Time: 18:00
-Place: Asman
-Your seat: Table ${data.table}, Seat ${data.seat}
-Price: 5500 Som
-Ticket ID: ${data.ticketId}
-
-Ticket is attached. Please show it at the event entrance!
-
-Welcome to GOLDENMIDDLE!`;
-
-    // Draw the main ticket text
-    firstPage.drawText(ticketText, {
-      x: 50,
-      y: height - 50,
-      size: 12,
+    // Calculate positions based on template dimensions and example image reference
+    // Template dimensions: 460.8 x 250.08 (based on actual template)
+    // Positions match the example image exactly
+    
+    // Position for full name (center area, large bold text as in example)
+    const namePosition = {
+      x: width / 2 - 100,  // Center horizontally, accounting for text width
+      y: height / 2 + 20,  // Center vertically, matching example position
+      size: 18,            // Larger size to match example prominence
+      font: font,
+      color: rgb(0, 0, 0)
+    };
+    
+    // Position for table and seat (right lower corner, exactly as in example)
+    const tableSeatPosition = {
+      x: width - 140,     // Right side of ticket, matching example
+      y: 50,              // Lower area, matching example position
+      size: 14,           // Size matching example
       font: regularFont,
-      color: rgb(0, 0, 0),
-      lineHeight: 16
-    });
+      color: rgb(0, 0, 0)
+    };
 
-    // Generate QR code with real ticket ID
-    const qrDataUrl = await QRCode.toDataURL(data.ticketId, {
+    // Overlay the user's full name in the center (Cyrillic for proper rendering)
+    console.log('✏️ Adding user name to template...');
+    try {
+      firstPage.drawText(fullName, namePosition);
+    } catch (cyrillicError) {
+      console.log('⚠️ Cyrillic rendering failed, using transliteration fallback');
+      // Fallback to transliteration if Cyrillic fails
+      const transliterateName = (name) => {
+        const cyrillicToLatin = {
+          'А': 'A', 'Б': 'B', 'В': 'V', 'Г': 'G', 'Д': 'D', 'Е': 'E', 'Ё': 'E',
+          'Ж': 'Zh', 'З': 'Z', 'И': 'I', 'Й': 'Y', 'К': 'K', 'Л': 'L', 'М': 'M',
+          'Н': 'N', 'О': 'O', 'П': 'P', 'Р': 'R', 'С': 'S', 'Т': 'T', 'У': 'U',
+          'Ф': 'F', 'Х': 'Kh', 'Ц': 'Ts', 'Ч': 'Ch', 'Ш': 'Sh', 'Щ': 'Shch',
+          'Ъ': '', 'Ы': 'Y', 'Ь': '', 'Э': 'E', 'Ю': 'Yu', 'Я': 'Ya',
+          'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'e',
+          'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
+          'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
+          'ф': 'f', 'х': 'kh', 'ц': 'ts', 'ч': 'ch', 'ш': 'sh', 'щ': 'shch',
+          'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya'
+        };
+        return name.split('').map(char => cyrillicToLatin[char] || char).join('');
+      };
+      const fallbackName = transliterateName(fullName);
+      firstPage.drawText(fallbackName, namePosition);
+    }
+
+    // Overlay table and seat information (matching example format exactly)
+    console.log('✏️ Adding table and seat info to template...');
+    const tableSeatText = `Стол ${table} Место ${seat}`; // Exact format as in example
+    try {
+      firstPage.drawText(tableSeatText, tableSeatPosition);
+    } catch (cyrillicError) {
+      console.log('⚠️ Cyrillic rendering failed for table/seat, using English fallback');
+      const fallbackTableSeatText = `Table ${table} Seat ${seat}`;
+      firstPage.drawText(fallbackTableSeatText, tableSeatPosition);
+    }
+
+    // Generate and overlay QR code with real ticket ID
+    console.log('🔲 Generating QR code for ticket ID:', ticketId);
+    const qrDataUrl = await QRCode.toDataURL(ticketId, {
       width: 200,
       margin: 2,
       color: {
@@ -150,28 +165,30 @@ Welcome to GOLDENMIDDLE!`;
       }
     });
     
+    // Convert data URL to image bytes
     const qrImageBytes = Buffer.from(qrDataUrl.split(',')[1], 'base64');
     const qrImage = await pdfDoc.embedPng(qrImageBytes);
     
-    // Draw QR code (bottom right area)
-    const qrSize = 100;
+    // Draw QR code in left lower corner (exactly as shown in example)
+    const qrSize = 50; // Size matching the example QR code
     firstPage.drawImage(qrImage, {
-      x: width - qrSize - 30,
-      y: 30,
+      x: 30,              // Left side of ticket, matching example position
+      y: 30,              // Lower area, matching example position
       width: qrSize,
       height: qrSize
     });
 
-    // Add ticket ID text near QR code
-    firstPage.drawText(data.ticketId, {
-      x: width - qrSize - 30,
+    // Add ticket ID text near QR code (left lower corner, matching example)
+    firstPage.drawText(ticketId, {
+      x: 30,
       y: 20,
-      size: 10,
+      size: 9,
       font: regularFont,
       color: rgb(0, 0, 0)
     });
 
     // Save the PDF
+    console.log('💾 Saving PDF...');
     const pdfBytes = await pdfDoc.save();
     
     // Ensure output directory exists
@@ -182,31 +199,26 @@ Welcome to GOLDENMIDDLE!`;
     
     fs.writeFileSync(outputPath, pdfBytes);
     
-    console.log('✅ Ticket generated successfully with real data!');
+    console.log('✅ Ticket generated successfully!');
     console.log('📁 Output file:', outputPath);
     console.log('📊 File size:', (pdfBytes.length / 1024).toFixed(2), 'KB');
     
     return {
       success: true,
       outputPath: outputPath,
-      fileSize: pdfBytes.length,
-      ticketId: data.ticketId,
-      fullName: data.fullName
+      fileSize: pdfBytes.length
     };
 
   } catch (error) {
-    console.error('❌ Error generating ticket from template:', error);
+    console.error('❌ Error generating ticket:', error.message);
+    console.error('Stack trace:', error.stack);
     throw error;
   }
 }
 
 // Generate ticket for booking with template support
 async function generateTicketForBooking(booking) {
-  // Extract and normalize booking data
-  const data = extractBookingData(booking);
-  
-  // Always generate a ticket ID if missing
-  const ticketId = data.ticketId;
+  const ticketId = booking.ticket_id || ('T' + Date.now().toString(36).toUpperCase());
   const pdfFilename = `${ticketId}.pdf`;
   const ticketsDir = path.join(__dirname, '..', 'tickets');
   const pdfFilepath = path.join(ticketsDir, pdfFilename);
@@ -216,13 +228,21 @@ async function generateTicketForBooking(booking) {
     fs.mkdirSync(ticketsDir, { recursive: true });
   }
 
-  // Try to find template files
+  // Try to find template files (prioritize example templates)
+  const examplePdf = path.join(__dirname, 'example.pdf');
+  const examplePng = path.join(__dirname, 'example.png');
   const templatePdf = path.join(__dirname, 'ticket_design.pdf');
   const templatePng = path.join(__dirname, 'ticket_design.png');
   const fallbackTemplate = path.join(__dirname, 'ticket_template.pdf');
 
   let templatePath = null;
-  if (fs.existsSync(templatePdf)) {
+  if (fs.existsSync(examplePdf)) {
+    templatePath = examplePdf;
+    console.log('✅ Using example PDF template:', examplePdf);
+  } else if (fs.existsSync(examplePng)) {
+    templatePath = examplePng;
+    console.log('✅ Using example PNG template:', examplePng);
+  } else if (fs.existsSync(templatePdf)) {
     templatePath = templatePdf;
     console.log('✅ Using PDF template:', templatePdf);
   } else if (fs.existsSync(templatePng)) {
@@ -246,10 +266,7 @@ async function generateTicketForBooking(booking) {
       ticketId,
       path: `/tickets/${pdfFilename}`,
       localPath: pdfFilepath,
-      isTemp: false,
-      fullName: data.fullName,
-      table: data.table,
-      seat: data.seat
+      isTemp: false
     };
   } catch (error) {
     console.error('❌ Error generating ticket from template:', error);
@@ -260,11 +277,13 @@ async function generateTicketForBooking(booking) {
 
 // Create a basic template if none exists
 async function createBasicTemplate(templatePath) {
+  console.log('🎫 Creating basic ticket template...');
   try {
     const pdfDoc = await PDFDocument.create();
     const page = pdfDoc.addPage([400, 600]);
     const { width, height } = page.getSize();
 
+    // Embed fonts
     const titleFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
@@ -274,7 +293,7 @@ async function createBasicTemplate(templatePath) {
       y: 0,
       width: width,
       height: height,
-      color: rgb(1, 0.84, 0)
+      color: rgb(1, 0.84, 0) // Gold color
     });
 
     // Border
@@ -285,7 +304,7 @@ async function createBasicTemplate(templatePath) {
       height: height - 40,
       borderColor: rgb(0.8, 0.6, 0),
       borderWidth: 5,
-      color: rgb(1, 1, 1)
+      color: rgb(1, 1, 1) // White inner background
     });
 
     // Title
@@ -330,50 +349,54 @@ async function createBasicTemplate(templatePath) {
       color: rgb(0, 0, 0)
     });
     
-    page.drawText('Name: [WILL BE FILLED]', {
+    page.drawText('Name and Surname', {
       x: 50,
       y: height - 220,
       size: 12,
       font: regularFont,
-      color: rgb(0, 0, 0)
+      color: rgb(0.5, 0.5, 0.5)
     });
     
-    page.drawText('Table: [WILL BE FILLED]', {
-      x: 50,
-      y: height - 240,
-      size: 12,
-      font: regularFont,
-      color: rgb(0, 0, 0)
-    });
-    
-    page.drawText('Seat: [WILL BE FILLED]', {
-      x: 50,
-      y: height - 260,
-      size: 12,
-      font: regularFont,
-      color: rgb(0, 0, 0)
-    });
-    
-    page.drawText('Ticket ID: [WILL BE FILLED]', {
+    // Table and seat placeholder
+    page.drawText('Table and Seat Number', {
       x: 50,
       y: height - 280,
       size: 12,
       font: regularFont,
-      color: rgb(0, 0, 0)
+      color: rgb(0.5, 0.5, 0.5)
+    });
+    
+    // QR code placeholder
+    page.drawRectangle({
+      x: width - 100,
+      y: 50,
+      width: 100,
+      height: 100,
+      borderColor: rgb(0, 0, 0),
+      borderWidth: 1
+    });
+    page.drawText('QR Code Here', {
+      x: width - 90,
+      y: 95,
+      size: 10,
+      font: regularFont,
+      color: rgb(0.5, 0.5, 0.5)
     });
 
     const pdfBytes = await pdfDoc.save();
     fs.writeFileSync(templatePath, pdfBytes);
-    console.log('✅ Basic template created:', templatePath);
+    console.log('✅ Basic template created successfully!');
+    console.log('📁 Template saved to:', templatePath);
+    console.log('📊 File size:', (fs.statSync(templatePath).size / 1024).toFixed(2), 'KB');
+
   } catch (error) {
     console.error('❌ Error creating basic template:', error);
     throw error;
   }
 }
 
-// Generate text ticket as fallback
+// Fallback text ticket generation
 function generateTextTicket(booking, ticketId) {
-  const data = extractBookingData(booking);
   const txtFilename = `${ticketId}.txt`;
   const txtFilepath = path.join(__dirname, '..', 'tickets', txtFilename);
   const contentLines = [
@@ -381,10 +404,10 @@ function generateTextTicket(booking, ticketId) {
     ``,
     `Ticket ID: ${ticketId}`,
     `Booking ID: ${booking.booking_string_id || booking.id}`,
-    `Name: ${data.fullName}`,
-    `Phone: ${data.phone}`,
-    `Table: ${data.table}`,
-    `Seat: ${data.seat}`,
+    `Name: ${booking.first_name} ${booking.last_name}`,
+    `Phone: ${booking.user_phone || booking.phone}`,
+    `Table: ${booking.table_number || booking.table}`,
+    `Seat: ${booking.seat_number || booking.seat}`,
     `Date: ${booking.created_at}`,
     `Status: ✅ CONFIRMED & PAID`,
     ``,
@@ -394,6 +417,7 @@ function generateTextTicket(booking, ticketId) {
     `Thank you for your booking! 🎓`
   ];
   
+  // Ensure tickets directory exists
   const ticketsDir = path.dirname(txtFilepath);
   if (!fs.existsSync(ticketsDir)) {
     fs.mkdirSync(ticketsDir, { recursive: true });
@@ -404,10 +428,7 @@ function generateTextTicket(booking, ticketId) {
     ticketId, 
     path: `/tickets/${txtFilename}`, 
     localPath: txtFilepath, 
-    isTemp: false,
-    fullName: data.fullName,
-    table: data.table,
-    seat: data.seat
+    isTemp: false
   };
 }
 
@@ -438,13 +459,7 @@ async function uploadFileToSupabase(localPath, destKey) {
   }
 }
 
-// Get public URL for ticket (Railway fallback)
-function getPublicTicketUrl(ticketPath, ticketId) {
-  const baseUrl = process.env.PUBLIC_BASE_URL || process.env.RAILWAY_PUBLIC_DOMAIN || 'https://upbeat-compassion-production.up.railway.app';
-  return `${baseUrl}${ticketPath}`;
-}
-
-// Send WhatsApp message with Russian text and PDF
+// Send WhatsApp message with Russian text and emojis
 async function sendWhatsAppTicket(phone, ticket) {
   const cleanPhone = phone.replace(/[^\d]/g, '');
   const chatId = cleanPhone + '@c.us';
@@ -452,17 +467,27 @@ async function sendWhatsAppTicket(phone, ticket) {
   console.log('📱 Sending WhatsApp ticket to:', phone, 'chatId:', chatId);
   
   try {
-    // First send the Russian text message with emojis
-    const russianMessage = `🎫 Здравствуйте, ${ticket.firstName || 'Guest'}!
+    // Extract real user data for proper personalization
+    const firstName = ticket.firstName || ticket.first_name || 'Guest';
+    const lastName = ticket.lastName || ticket.last_name || '';
+    const fullName = lastName ? `${firstName} ${lastName}` : firstName;
+    const table = ticket.table || 'N/A';
+    const seat = ticket.seat || 'N/A';
+    const ticketId = ticket.ticketId || 'N/A';
+
+    console.log('📱 Using real user data for WhatsApp:', { fullName, table, seat, ticketId });
+
+    // First send the Russian text message with emojis (exact format as specified)
+    const russianMessage = `🎫 Здравствуйте, ${fullName}!
 
 🎉 Ваш золотой билет на GOLDENMIDDLE готов!
 
 📅 Дата: 26 октября 2025
 ⏰ Время: 18:00
 📍 Место: Асман
-🪑 Ваше место: Стол ${ticket.table || 'N/A'}, Место ${ticket.seat || 'N/A'}
+🪑 Ваше место: Стол ${table}, Место ${seat}
 💵 Цена: 5500 Сом
-🆔 ID билета: ${ticket.ticketId || 'N/A'}
+🆔 ID билета: ${ticketId}
 
 📎 Билет во вложении. Покажите его при входе на мероприятие!
 
@@ -511,8 +536,7 @@ async function sendWhatsAppTicket(phone, ticket) {
         success: true,
         message: 'Text message sent successfully via Green API',
         provider: 'Green API',
-        textMessageId: textResponse.data?.idMessage,
-        pdfMessageId: null
+        textMessageId: textResponse.data?.idMessage
       };
     }
     
@@ -529,9 +553,8 @@ async function sendWhatsAppTicket(phone, ticket) {
 
 module.exports = {
   generateTicketForBooking,
+  generateTicketFromTemplate,
   uploadFileToSupabase,
   sendWhatsAppTicket,
-  getPublicTicketUrl,
-  extractBookingData,
-  generateTicketId
+  createBasicTemplate
 };

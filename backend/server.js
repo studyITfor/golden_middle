@@ -322,8 +322,18 @@ async function initializeApp() {
     }
 }
 
+// Throttle seat updates to avoid Railway rate limits
+let lastSeatUpdate = 0;
+const SEAT_UPDATE_THROTTLE = 2000; // 2 seconds minimum between updates
+
 // Function to emit seat updates to all connected clients
-async function emitSeatUpdate() {
+async function emitSeatUpdate(force = false) {
+    const now = Date.now();
+    if (!force && (now - lastSeatUpdate) < SEAT_UPDATE_THROTTLE) {
+        return; // Skip if too soon
+    }
+    lastSeatUpdate = now;
+    
     try {
         // Get current seat statuses
         const seatStatuses = {};
@@ -354,7 +364,7 @@ async function emitSeatUpdate() {
                 }
                 
                 seatStatuses[seatId] = status;
-                console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.status})`);
+                // Reduced logging for Railway production
             }
         });
         
@@ -374,10 +384,15 @@ async function emitSeatUpdate() {
         };
         
         // Emit seat update to ALL connected clients (both admins and students)
-        console.log('📡 Emitting seatUpdate event to all clients...');
+        // Reduced logging for Railway production
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('📡 Emitting seatUpdate event to all clients...');
+        }
         io.emit('seatUpdate', updateData);
         
-        console.log('📡 Emitting update-seat-status event to all clients...');
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('📡 Emitting update-seat-status event to all clients...');
+        }
         io.emit('update-seat-status', updateData);
         
         // Also emit specifically to admins room for admin-specific updates
@@ -385,26 +400,17 @@ async function emitSeatUpdate() {
         const adminCount = adminsRoom ? adminsRoom.size : 0;
         
         if (adminCount > 0) {
-            console.log(`📡 Emitting admin:seat-update event to ${adminCount} admin clients...`);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`📡 Emitting admin:seat-update event to ${adminCount} admin clients...`);
+            }
             io.to('admins').emit('admin:seat-update', {
                 ...updateData,
                 adminNotification: true
             });
         }
         
-        console.log('✅ Seat update events emitted successfully');
-        console.log(`📊 Total connected clients: ${io.engine.clientsCount}`);
-        console.log(`📊 Admin clients in room: ${adminCount}`);
-        console.log(`📊 Event data:`, {
-            success: updateData.success,
-            totalSeats: updateData.totalSeats,
-            statusCounts: updateData.statusCounts,
-            timestamp: new Date(updateData.timestamp).toISOString()
-        });
-        
-        console.log(`📡 Seat update emitted to ${io.engine.clientsCount} connected clients`);
-        console.log(`📊 Total seats: ${Object.keys(seatStatuses).length}`);
-        console.log(`📊 Status distribution:`, statusCounts);
+        // Reduced logging for Railway production
+        console.log(`📡 Seat update emitted to ${io.engine.clientsCount} clients`);
     } catch (error) {
         console.error('Error emitting seat update:', error);
     }
@@ -458,7 +464,7 @@ app.get('/api/test-db', async (req, res) => {
 // Get all bookings for admin panel
 app.get('/api/bookings', async (req, res) => {
     try {
-        console.log('🔍 Admin requesting all bookings...');
+        // Reduced logging for Railway production
         
         const result = await db.query(`
             SELECT b.*, u.phone 
@@ -912,7 +918,7 @@ function emitSeatBulkUpdate() {
                 }
                 
                 seatStatuses[seatId] = status;
-                console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.status})`);
+                // Reduced logging for Railway production
             }
         });
         
@@ -935,10 +941,7 @@ function emitSeatBulkUpdate() {
         // Emit bulk update to all connected clients
         io.emit('seatBulkUpdate', bulkUpdateData);
         
-        console.log(`📡 Bulk seat update emitted to ${io.engine.clientsCount} connected clients`);
-        console.log(`📊 Total seats: ${Object.keys(seatStatuses).length}`);
-        console.log(`📊 Status distribution:`, statusCounts);
-        console.log(`🔄 All seats set to available status`);
+        console.log(`📡 Bulk seat update emitted to ${io.engine.clientsCount} clients`);
     } catch (error) {
         console.error('Error emitting bulk seat update:', error);
     }
@@ -2008,8 +2011,10 @@ app.post('/api/confirm-payment', async (req, res) => {
           
         } catch (uploadError) {
           console.error('❌ Failed to upload to Supabase:', uploadError);
-          // Fallback to local URL
-          publicPdfUrl = `${process.env.PUBLIC_BASE_URL || 'http://localhost:3000'}${ticket.path}`;
+          // Fallback to production URL
+          const baseUrl = process.env.PUBLIC_BASE_URL || 'https://upbeat-compassion-production.up.railway.app';
+          publicPdfUrl = `${baseUrl}${ticket.path}`;
+          console.log('📎 Using production URL for PDF:', publicPdfUrl);
         }
       }
     } catch (e) {
@@ -2024,7 +2029,7 @@ app.post('/api/confirm-payment', async (req, res) => {
         console.log('📱 Sending WhatsApp ticket to:', phone, 'ticket:', ticket?.ticketId);
         
         // Use public URL for Green API - ensure it's a valid URL
-        const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+        const baseUrl = process.env.PUBLIC_BASE_URL || 'https://upbeat-compassion-production.up.railway.app';
         const pdfUrl = publicPdfUrl || (ticket && ticket.localPath ? `${baseUrl}${ticket.path}` : null);
         
         console.log('🔗 Ticket URL for WhatsApp:', { 
@@ -2040,6 +2045,9 @@ app.post('/api/confirm-payment', async (req, res) => {
           ticketId: ticket?.ticketId || null,
           pdfUrl: pdfUrl,
           firstName: updatedBooking.first_name,
+          lastName: updatedBooking.last_name,
+          first_name: updatedBooking.first_name,
+          last_name: updatedBooking.last_name,
           table: updatedBooking.table_number || updatedBooking.table,
           seat: updatedBooking.seat_number || updatedBooking.seat
         };
@@ -2809,15 +2817,11 @@ app.get('/api/seat-statuses', async (req, res) => {
                 }
                 
                 seatStatuses[seatId] = status;
-                console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.status})`);
+                // Reduced logging for Railway production
             }
         });
         
-        console.log(`📊 Returning seat statuses: ${Object.keys(seatStatuses).length} seats`);
-        console.log(`📊 Status distribution:`, Object.values(seatStatuses).reduce((acc, status) => {
-            acc[status] = (acc[status] || 0) + 1;
-            return acc;
-        }, {}));
+        // Reduced logging for Railway production
         
         res.json({
             success: true,
