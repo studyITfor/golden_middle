@@ -166,17 +166,26 @@ app.use('/js', express.static(path.join(PUBLIC_PATH, 'js')));
 // Test static file serving with a simple route
 app.use('/test-static', express.static(path.join(__dirname, 'tickets')));
 
-// Serve tickets folder publicly for WhatsApp PDF delivery
-const TICKETS_PATH = path.join(__dirname, 'tickets');
-app.use('/tickets', express.static(TICKETS_PATH, { 
-  setHeaders: (res, path) => {
-    if (path.endsWith('.pdf')) {
+// === TICKETS STATIC (canonical) ===
+const TICKETS_PATH = path.resolve(__dirname, 'tickets'); // <== backend/tickets
+
+// create tickets dir if missing at runtime (safe)
+try {
+  if (!fs.existsSync(TICKETS_PATH)) {
+    fs.mkdirSync(TICKETS_PATH, { recursive: true });
+    console.log('Created tickets directory:', TICKETS_PATH);
+  }
+} catch (err) {
+  console.error('Failed to ensure tickets directory exists:', err.message);
+}
+
+// Serve tickets with PDF headers
+app.use('/tickets', express.static(TICKETS_PATH, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.pdf')) {
       res.type('application/pdf');
-      res.set('Content-Disposition', 'attachment; filename=' + path.split('/').pop());
-      res.set('Cache-Control', 'public, max-age=3600');
-      res.set('Access-Control-Allow-Origin', '*');
-      res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
-      res.set('Access-Control-Allow-Headers', 'Content-Type');
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
     }
   }
 }));
@@ -206,64 +215,16 @@ app.get('/debug/tickets', (req, res) => {
   }
 });
 
-// Debug endpoint to list files in both tickets directories
+// Debug endpoint to list files in tickets directory
 app.get('/debug/list-tickets', (req, res) => {
   try {
-    const ticketsDir1 = path.join(__dirname, 'tickets'); // /app/tickets
-    const ticketsDir2 = path.join(__dirname, '..', 'tickets'); // /tickets
-    
-    const dir1Exists = fs.existsSync(ticketsDir1);
-    const dir2Exists = fs.existsSync(ticketsDir2);
-    
-    let dir1Files = [];
-    let dir2Files = [];
-    
-    if (dir1Exists) {
-      dir1Files = fs.readdirSync(ticketsDir1).map(file => {
-        const filePath = path.join(ticketsDir1, file);
-        const stats = fs.statSync(filePath);
-        return {
-          name: file,
-          size: stats.size,
-          isFile: stats.isFile(),
-          modified: stats.mtime
-        };
-      });
-    }
-    
-    if (dir2Exists) {
-      dir2Files = fs.readdirSync(ticketsDir2).map(file => {
-        const filePath = path.join(ticketsDir2, file);
-        const stats = fs.statSync(filePath);
-        return {
-          name: file,
-          size: stats.size,
-          isFile: stats.isFile(),
-          modified: stats.mtime
-        };
-      });
-    }
-    
-    res.json({
-      success: true,
-      directories: {
-        '/app/tickets': {
-          path: ticketsDir1,
-          exists: dir1Exists,
-          files: dir1Files
-        },
-        '/tickets': {
-          path: ticketsDir2,
-          exists: dir2Exists,
-          files: dir2Files
-        }
-      }
+    const files = fs.readdirSync(TICKETS_PATH).map(f => {
+      const s = fs.statSync(path.join(TICKETS_PATH, f));
+      return { name: f, size: s.size, mtime: s.mtime };
     });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
+    res.json({ ok: true, path: TICKETS_PATH, files });
+  } catch (err) {
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
@@ -486,8 +447,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // Serve js files specifically
 app.use('/js', express.static(path.join(__dirname, '..', 'public', 'js')));
 
-// Serve tickets directory statically
-app.use('/tickets', express.static(path.join(__dirname, '..', 'tickets')));
+// Serve tickets directory statically - REMOVED: duplicate route that was overriding the correct one above
 
 // Serve temporary ticket files
 app.use('/temp-tickets', express.static(os.tmpdir()));
