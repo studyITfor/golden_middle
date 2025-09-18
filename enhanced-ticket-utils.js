@@ -585,6 +585,11 @@ async function sendWhatsAppTicket(phone, ticket) {
         // Ensure we always have a proper base URL with https://
         let base = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PUBLIC_BASE_URL || 'https://upbeat-compassion-production.up.railway.app';
         
+        // TEMPORARY FIX: Force the correct URL
+        if (process.env.NODE_ENV === 'production') {
+          base = 'https://upbeat-compassion-production.up.railway.app';
+        }
+        
         // Remove trailing slash
         base = base.replace(/\/$/, '');
         
