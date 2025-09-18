@@ -23,7 +23,22 @@ app.use(cors());
 // Serve static files
 const FRONTEND_PATH = path.resolve(__dirname, '..', 'frontend');
 app.use(express.static(FRONTEND_PATH));
-app.use('/tickets', express.static(path.join(__dirname, '..', 'tickets')));
+// Use correct path for Railway environment
+const TICKETS_PATH = process.env.NODE_ENV === 'production'
+  ? '/app/tickets'
+  : path.join(__dirname, '..', 'tickets');
+
+// Ensure tickets directory exists
+try {
+  if (!fs.existsSync(TICKETS_PATH)) {
+    fs.mkdirSync(TICKETS_PATH, { recursive: true });
+    console.log('Created tickets directory:', TICKETS_PATH);
+  }
+} catch (err) {
+  console.error('Failed to ensure tickets directory exists:', err.message);
+}
+
+app.use('/tickets', express.static(TICKETS_PATH));
 
 // Routes
 app.get('/', (req, res) => {
