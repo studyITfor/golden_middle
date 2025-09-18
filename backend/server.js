@@ -3299,6 +3299,335 @@ server.on('error', (err) => {
         console.error('  3. Kill the process: taskkill /PID <pid> /F (Windows)');
     }
 });
+
+// Bulk confirmation endpoint - automatically send WhatsApp tickets for confirmed bookings
+app.post('/api/bulk-confirm-payments', async (req, res) => {
+  try {
+    console.log('🔄 Bulk confirmation request received');
+    
+    // Get all pending bookings
+    const pendingBookings = await db.query(`
+      SELECT * FROM bookings 
+      WHERE status = 'pending' 
+      AND (user_phone IS NOT NULL OR phone IS NOT NULL)
+      ORDER BY created_at ASC
+    `);
+    
+    if (pendingBookings.rows.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No pending bookings found',
+        processed: 0,
+        results: []
+      });
+    }
+    
+    console.log(`📋 Found ${pendingBookings.rows.length} pending bookings to process`);
+    
+    const results = [];
+    
+    for (const booking of pendingBookings.rows) {
+      try {
+        console.log(`🔄 Processing booking ${booking.booking_string_id || booking.id}...`);
+        
+        // Update booking status to paid
+        await db.query('UPDATE bookings SET status = $1, updated_at = now() WHERE id = $2', 
+          ['paid', booking.id]);
+        
+        // Generate ticket
+        const { generateTicketForBooking, uploadFileToSupabase, sendBothTicketFiles } = require('./ticket-utils');
+        const ticket = await generateTicketForBooking(booking);
+        
+        if (!ticket || !ticket.ticketId) {
+          console.error(`❌ Failed to generate ticket for booking ${booking.id}`);
+          results.push({
+            bookingId: booking.booking_string_id || booking.id,
+            success: false,
+            error: 'Failed to generate ticket'
+          });
+          continue;
+        }
+        
+        // Upload to external storage if available
+        let publicPdfUrl = null;
+        let publicImageUrl = null;
+        
+        if (ticket.localPath && ticket.imageLocalPath) {
+          try {
+            const pdfFileName = path.basename(ticket.localPath);
+            const imageFileName = path.basename(ticket.imageLocalPath);
+            
+            publicPdfUrl = await uploadFileToSupabase(ticket.localPath, `tickets/${pdfFileName}`);
+            publicImageUrl = await uploadFileToSupabase(ticket.imageLocalPath, `tickets/${imageFileName}`);
+            
+            // Update booking with public URLs
+            await db.query('UPDATE bookings SET ticket_path = $1, ticket_image_path = $2, ticket_id = $3 WHERE id = $4', 
+              [publicPdfUrl, publicImageUrl, ticket.ticketId, booking.id]);
+              
+            // Clean up temporary files
+            if (ticket.isTemp) {
+              if (fs.existsSync(ticket.localPath)) fs.unlinkSync(ticket.localPath);
+              if (fs.existsSync(ticket.imageLocalPath)) fs.unlinkSync(ticket.imageLocalPath);
+            }
+          } catch (uploadError) {
+            console.warn(`⚠️ Upload failed for booking ${booking.id}, using local URLs:`, uploadError.message);
+            // Fallback to local URLs
+            const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+            publicPdfUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}`;
+            publicImageUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.imageLocalPath)}`;
+          }
+        }
+        
+        // Send WhatsApp
+        const phone = booking.user_phone || booking.phone;
+        if (phone && /^\+\d{10,15}$/.test(phone)) {
+          const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+          const pdfUrl = publicPdfUrl || (ticket.localPath ? `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}` : null);
+          const imageUrl = publicImageUrl || (ticket.imageLocalPath ? `${baseUrl}/temp-tickets/${path.basename(ticket.imageLocalPath)}` : null);
+          
+          const ticketForWhatsApp = {
+            ticketId: ticket.ticketId,
+            pdfUrl: pdfUrl,
+            imageUrl: imageUrl
+          };
+          
+          const whatsappResult = await sendBothTicketFiles(phone, ticketForWhatsApp);
+          
+          if (whatsappResult.success) {
+            await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, updated_at = now() WHERE id = $2', 
+              [whatsappResult.imageMessageId || whatsappResult.pdfMessageId, booking.id]);
+            
+            console.log(`✅ WhatsApp sent for booking ${booking.booking_string_id || booking.id}:`, whatsappResult.pdfMessageId || whatsappResult.imageMessageId);
+            
+            results.push({
+              bookingId: booking.booking_string_id || booking.id,
+              success: true,
+              ticketId: ticket.ticketId,
+              whatsappMessageId: whatsappResult.pdfMessageId || whatsappResult.imageMessageId,
+              phone: phone
+            });
+          } else {
+            console.error(`❌ WhatsApp failed for booking ${booking.id}:`, whatsappResult.error);
+            await db.query('UPDATE bookings SET status = $1, confirmation_error = $2, updated_at = now() WHERE id = $3', 
+              ['confirmation_failed', JSON.stringify(whatsappResult.error), booking.id]);
+            
+            results.push({
+              bookingId: booking.booking_string_id || booking.id,
+              success: false,
+              error: whatsappResult.error
+            });
+          }
+        } else {
+          console.warn(`⚠️ Invalid phone for booking ${booking.id}: ${phone}`);
+          results.push({
+            bookingId: booking.booking_string_id || booking.id,
+            success: false,
+            error: 'Invalid phone number'
+          });
+        }
+        
+        // Small delay between processing bookings
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+      } catch (bookingError) {
+        console.error(`❌ Error processing booking ${booking.id}:`, bookingError);
+        results.push({
+          bookingId: booking.booking_string_id || booking.id,
+          success: false,
+          error: bookingError.message
+        });
+      }
+    }
+    
+    // Emit seat updates after bulk processing
+    emitSeatBulkUpdate();
+    
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+    
+    console.log(`✅ Bulk confirmation completed: ${successCount} successful, ${failureCount} failed`);
+    
+    res.json({
+      success: true,
+      message: `Bulk confirmation completed: ${successCount} successful, ${failureCount} failed`,
+      processed: results.length,
+      successful: successCount,
+      failed: failureCount,
+      results: results
+    });
+    
+  } catch (error) {
+    console.error('❌ Bulk confirmation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Bulk confirmation failed',
+      error: error.message
+    });
+  }
+});
+
+// Send WhatsApp tickets for bookings that have ticketId but no WhatsApp sent
+app.post('/api/send-pending-tickets', async (req, res) => {
+  try {
+    console.log('📱 Sending pending tickets request received');
+    
+    // Get bookings that have ticketId but no WhatsApp sent
+    const pendingTickets = await db.query(`
+      SELECT * FROM bookings 
+      WHERE ticket_id IS NOT NULL 
+      AND (whatsapp_sent = false OR whatsapp_sent IS NULL)
+      AND (user_phone IS NOT NULL OR phone IS NOT NULL)
+      AND status = 'paid'
+      ORDER BY created_at ASC
+    `);
+    
+    if (pendingTickets.rows.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No pending tickets found',
+        processed: 0,
+        results: []
+      });
+    }
+    
+    console.log(`📋 Found ${pendingTickets.rows.length} bookings with pending tickets`);
+    
+    const results = [];
+    
+    for (const booking of pendingTickets.rows) {
+      try {
+        console.log(`📱 Sending ticket for booking ${booking.booking_string_id || booking.id}...`);
+        
+        const phone = booking.user_phone || booking.phone;
+        if (!phone || !/^\+\d{10,15}$/.test(phone)) {
+          console.warn(`⚠️ Invalid phone for booking ${booking.id}: ${phone}`);
+          results.push({
+            bookingId: booking.booking_string_id || booking.id,
+            success: false,
+            error: 'Invalid phone number'
+          });
+          continue;
+        }
+        
+        // Use existing ticket paths or generate new ones
+        let pdfUrl = null;
+        let imageUrl = null;
+        
+        if (booking.ticket_path) {
+          pdfUrl = booking.ticket_path;
+        }
+        if (booking.ticket_image_path) {
+          imageUrl = booking.ticket_image_path;
+        }
+        
+        // If no URLs available, try to generate ticket
+        if (!pdfUrl && !imageUrl) {
+          console.log(`🎫 Generating new ticket for booking ${booking.id}...`);
+          const { generateTicketForBooking, uploadFileToSupabase } = require('./ticket-utils');
+          const ticket = await generateTicketForBooking(booking);
+          
+          if (ticket && ticket.ticketId) {
+            // Upload to external storage if available
+            if (ticket.localPath && ticket.imageLocalPath) {
+              try {
+                const pdfFileName = path.basename(ticket.localPath);
+                const imageFileName = path.basename(ticket.imageLocalPath);
+                
+                pdfUrl = await uploadFileToSupabase(ticket.localPath, `tickets/${pdfFileName}`);
+                imageUrl = await uploadFileToSupabase(ticket.imageLocalPath, `tickets/${imageFileName}`);
+                
+                // Update booking with public URLs
+                await db.query('UPDATE bookings SET ticket_path = $1, ticket_image_path = $2 WHERE id = $3', 
+                  [pdfUrl, imageUrl, booking.id]);
+                  
+                // Clean up temporary files
+                if (ticket.isTemp) {
+                  if (fs.existsSync(ticket.localPath)) fs.unlinkSync(ticket.localPath);
+                  if (fs.existsSync(ticket.imageLocalPath)) fs.unlinkSync(ticket.imageLocalPath);
+                }
+              } catch (uploadError) {
+                console.warn(`⚠️ Upload failed for booking ${booking.id}, using local URLs:`, uploadError.message);
+                // Fallback to local URLs
+                const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+                pdfUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}`;
+                imageUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.imageLocalPath)}`;
+              }
+            }
+          }
+        }
+        
+        // Send WhatsApp
+        const { sendBothTicketFiles } = require('./ticket-utils');
+        const ticketForWhatsApp = {
+          ticketId: booking.ticket_id,
+          pdfUrl: pdfUrl,
+          imageUrl: imageUrl
+        };
+        
+        const whatsappResult = await sendBothTicketFiles(phone, ticketForWhatsApp);
+        
+        if (whatsappResult.success) {
+          await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, updated_at = now() WHERE id = $2', 
+            [whatsappResult.imageMessageId || whatsappResult.pdfMessageId, booking.id]);
+          
+          console.log(`✅ WhatsApp sent for booking ${booking.booking_string_id || booking.id}:`, whatsappResult.pdfMessageId || whatsappResult.imageMessageId);
+          
+          results.push({
+            bookingId: booking.booking_string_id || booking.id,
+            success: true,
+            ticketId: booking.ticket_id,
+            whatsappMessageId: whatsappResult.pdfMessageId || whatsappResult.imageMessageId,
+            phone: phone
+          });
+        } else {
+          console.error(`❌ WhatsApp failed for booking ${booking.id}:`, whatsappResult.error);
+          await db.query('UPDATE bookings SET confirmation_error = $1, updated_at = now() WHERE id = $2', 
+            [JSON.stringify(whatsappResult.error), booking.id]);
+          
+          results.push({
+            bookingId: booking.booking_string_id || booking.id,
+            success: false,
+            error: whatsappResult.error
+          });
+        }
+        
+        // Small delay between sending
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+      } catch (bookingError) {
+        console.error(`❌ Error sending ticket for booking ${booking.id}:`, bookingError);
+        results.push({
+          bookingId: booking.booking_string_id || booking.id,
+          success: false,
+          error: bookingError.message
+        });
+      }
+    }
+    
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+    
+    console.log(`✅ Pending tickets sent: ${successCount} successful, ${failureCount} failed`);
+    
+    res.json({
+      success: true,
+      message: `Pending tickets sent: ${successCount} successful, ${failureCount} failed`,
+      processed: results.length,
+      successful: successCount,
+      failed: failureCount,
+      results: results
+    });
+    
+  } catch (error) {
+    console.error('❌ Send pending tickets error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Send pending tickets failed',
+      error: error.message
+    });
+  }
+});
+
 // Graceful shutdown
 process.on('SIGINT', () => {
     console.log('\n🛑 Shutting down server gracefully...');
