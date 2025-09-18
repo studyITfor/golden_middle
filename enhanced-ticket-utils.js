@@ -582,10 +582,30 @@ async function sendWhatsAppTicket(phone, ticket) {
       
       // Safe absolute URL builder for GreenAPI
       function buildPublicPdfUrl(ticket) {
-        const base = (process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PUBLIC_BASE_URL || 'https://upbeat-compassion-production.up.railway.app').replace(/\/$/, '');
+        // Ensure we always have a proper base URL with https://
+        let base = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PUBLIC_BASE_URL || 'https://upbeat-compassion-production.up.railway.app';
+        
+        // Remove trailing slash
+        base = base.replace(/\/$/, '');
+        
+        // Ensure it starts with https://
+        if (!base.startsWith('https://') && !base.startsWith('http://')) {
+          base = `https://${base}`;
+        }
+        
         const rel = ticket.path || ticket.pdfPath || (`/tickets/${ticket.ticketId}.pdf`);
         const path = rel.startsWith('/') ? rel : `/${rel}`;
         const url = `${base}${path}`;
+        
+        console.log('🔧 URL Construction Debug:', {
+          'env.RAILWAY_PUBLIC_DOMAIN': process.env.RAILWAY_PUBLIC_DOMAIN,
+          'env.PUBLIC_BASE_URL': process.env.PUBLIC_BASE_URL,
+          'base': base,
+          'rel': rel,
+          'path': path,
+          'finalUrl': url
+        });
+        
         return url;
       }
       
