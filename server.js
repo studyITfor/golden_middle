@@ -285,6 +285,76 @@ app.get('/debug/test-pdf-generation', async (req, res) => {
   }
 });
 
+// Debug endpoint to check database schema and run migration
+app.get('/debug/database-schema', async (req, res) => {
+  try {
+    console.log('🔍 Checking database schema...');
+    
+    // Check if DATABASE_URL is set
+    if (!process.env.DATABASE_URL) {
+      return res.json({
+        success: false,
+        error: 'DATABASE_URL not set',
+        environment: process.env.NODE_ENV
+      });
+    }
+    
+    // Connect to database
+    const { Pool } = require('pg');
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
+    });
+    
+    // Get current table structure
+    const result = await pool.query(`
+      SELECT column_name, data_type, is_nullable, column_default
+      FROM information_schema.columns 
+      WHERE table_name = 'bookings' 
+      ORDER BY ordinal_position;
+    `);
+    
+    const columns = result.rows.map(row => ({
+      name: row.column_name,
+      type: row.data_type,
+      nullable: row.is_nullable === 'YES',
+      default: row.column_default
+    }));
+    
+    // Check if confirmation_error column exists
+    const hasConfirmationError = columns.some(col => col.name === 'confirmation_error');
+    
+    // If missing, try to add it
+    if (!hasConfirmationError) {
+      console.log('🔧 Adding missing confirmation_error column...');
+      try {
+        await pool.query('ALTER TABLE bookings ADD COLUMN confirmation_error TEXT;');
+        console.log('✅ Added confirmation_error column');
+      } catch (error) {
+        console.error('❌ Error adding column:', error.message);
+      }
+    }
+    
+    await pool.end();
+    
+    res.json({
+      success: true,
+      hasConfirmationError: hasConfirmationError,
+      columns: columns,
+      environment: process.env.NODE_ENV,
+      databaseUrl: process.env.DATABASE_URL ? 'Set' : 'Not set'
+    });
+    
+  } catch (error) {
+    console.error('❌ Database schema check failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 // Direct PDF serving endpoint as fallback
 app.get('/pdf/:filename', (req, res) => {
   try {
