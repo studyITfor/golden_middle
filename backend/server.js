@@ -6,6 +6,7 @@ const fontkit = require('@pdf-lib/fontkit');
 const QRCode = require('qrcode');
 const fs = require('fs-extra');
 const path = require('path');
+const os = require('os');
 const axios = require('axios');
 const cors = require('cors');
 const { Blob } = require('buffer');
@@ -155,6 +156,9 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 
 // Serve tickets directory statically
 app.use('/tickets', express.static(path.join(__dirname, '..', 'tickets')));
+
+// Serve temporary ticket files
+app.use('/temp-tickets', express.static(os.tmpdir()));
 
 // Health check endpoints
 app.get('/api/health', (req, res) => {
@@ -1979,75 +1983,108 @@ app.post('/api/confirm-payment', async (req, res) => {
     await db.query('COMMIT');
     console.log('✅ Payment transaction committed successfully');
 
-    // generate ticket (PDF or text) and upload to external storage
+    // generate ticket (PDF and image) and upload to external storage
     let ticket = null;
-    let publicTicketUrl = null;
+    let publicPdfUrl = null;
+    let publicImageUrl = null;
     try {
       console.log('🎫 Generating ticket for booking:', updatedBooking.id);
-      const { generateTicketForBooking } = require('./ticket-utils');
+      const { generateTicketForBooking, uploadFileToSupabase } = require('./ticket-utils');
       ticket = await generateTicketForBooking(updatedBooking);
       console.log('✅ Ticket generated successfully:', ticket);
       
-      // Upload ticket to external storage
-      if (ticket && ticket.localPath) {
-        console.log('📤 Uploading ticket to external storage...');
-        const fileName = path.basename(ticket.localPath);
-        const uploadResult = await uploadTicketToStorage(ticket.localPath, fileName);
+      // Upload both PDF and image to external storage
+      if (ticket && ticket.localPath && ticket.imageLocalPath) {
+        console.log('📤 Uploading ticket files to external storage...');
+        const pdfFileName = path.basename(ticket.localPath);
+        const imageFileName = path.basename(ticket.imageLocalPath);
         
-        if (uploadResult.success) {
-          publicTicketUrl = uploadResult.publicUrl;
-          console.log('✅ Ticket uploaded to external storage:', publicTicketUrl);
+        try {
+          // Upload PDF
+          publicPdfUrl = await uploadFileToSupabase(ticket.localPath, `tickets/${pdfFileName}`);
+          console.log('✅ PDF uploaded to Supabase:', publicPdfUrl);
           
-          // Update booking with public ticket URL
-          await db.query('UPDATE bookings SET ticket_path = $1 WHERE id = $2', 
-            [publicTicketUrl, updatedBooking.id]);
+          // Upload image
+          publicImageUrl = await uploadFileToSupabase(ticket.imageLocalPath, `tickets/${imageFileName}`);
+          console.log('✅ Image uploaded to Supabase:', publicImageUrl);
           
-          // Remove temporary file after successful upload
-          if (ticket.isTemp && fs.existsSync(ticket.localPath)) {
-            fs.unlinkSync(ticket.localPath);
-            console.log('🗑️ Temporary ticket file removed:', ticket.localPath);
+          // Update booking with public URLs
+          await db.query('UPDATE bookings SET ticket_path = $1, ticket_image_path = $2 WHERE id = $3', 
+            [publicPdfUrl, publicImageUrl, updatedBooking.id]);
+          
+          // Remove temporary files after successful upload
+          if (ticket.isTemp) {
+            if (fs.existsSync(ticket.localPath)) {
+              fs.unlinkSync(ticket.localPath);
+              console.log('🗑️ Temporary PDF file removed:', ticket.localPath);
+            }
+            if (fs.existsSync(ticket.imageLocalPath)) {
+              fs.unlinkSync(ticket.imageLocalPath);
+              console.log('🗑️ Temporary image file removed:', ticket.imageLocalPath);
+            }
           }
-        } else {
-          console.error('❌ Failed to upload ticket to external storage:', uploadResult.error);
-          // Fallback to local URL
-          publicTicketUrl = `${process.env.PUBLIC_BASE_URL || 'http://localhost:3000'}${ticket.path}`;
+        } catch (uploadError) {
+          console.error('❌ Failed to upload to Supabase:', uploadError);
+          // Fallback to local URLs
+          publicPdfUrl = `${process.env.PUBLIC_BASE_URL || 'http://localhost:3000'}${ticket.path}`;
+          publicImageUrl = `${process.env.PUBLIC_BASE_URL || 'http://localhost:3000'}${ticket.imagePath}`;
         }
       }
     } catch (e) {
       console.error('❌ Ticket generation error:', e);
     }
 
-    // send whatsapp via Green API with retry logic
+    // send whatsapp via Green API with both image and PDF
     let whatsappResult = null;
     try {
       const phone = updatedBooking.user_phone || updatedBooking.phone;
       if (phone && /^\+\d{10,15}$/.test(phone)) {
-        console.log('📱 Sending WhatsApp ticket to:', phone, 'ticket:', ticket?.ticketId);
+        console.log('📱 Sending WhatsApp ticket (image + PDF) to:', phone, 'ticket:', ticket?.ticketId);
         
-        // Use public ticket URL for Green API
-        const ticketForWhatsApp = ticket ? {
-          ...ticket,
-          path: publicTicketUrl || ticket.path
-        } : { ticketId: null, path: null };
+        // Use public URLs for Green API - ensure they are valid URLs
+        const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+        const pdfUrl = publicPdfUrl || (ticket && ticket.localPath ? `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}` : null);
+        const imageUrl = publicImageUrl || (ticket && ticket.imageLocalPath ? `${baseUrl}/temp-tickets/${path.basename(ticket.imageLocalPath)}` : null);
         
-        // Call Green API with retry logic
-        whatsappResult = await sendWhatsAppWithRetry(phone, ticketForWhatsApp);
+        console.log('🔗 Ticket URLs for WhatsApp:', { 
+          pdfUrl, 
+          imageUrl, 
+          ticket: ticket ? {
+            ticketId: ticket.ticketId,
+            localPath: ticket.localPath,
+            imageLocalPath: ticket.imageLocalPath,
+            path: ticket.path,
+            imagePath: ticket.imagePath
+          } : null
+        });
+        
+        const ticketForWhatsApp = {
+          ticketId: ticket?.ticketId || null,
+          pdfUrl: pdfUrl,
+          imageUrl: imageUrl
+        };
+        
+        // Call Green API to send both image and PDF
+        const { sendBothTicketFiles } = require('./ticket-utils');
+        whatsappResult = await sendBothTicketFiles(phone, ticketForWhatsApp);
         
         if (whatsappResult.success) {
           // Green API succeeded - update booking to paid
           await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, ticket_id = $2, updated_at = now() WHERE id=$3', 
-            [whatsappResult.textMessageId || whatsappResult.fileMessageId, ticket?.ticketId, updatedBooking.id]);
-          console.log('✅ WhatsApp sent successfully:', {
+            [whatsappResult.imageMessageId || whatsappResult.pdfMessageId, ticket?.ticketId, updatedBooking.id]);
+          console.log('✅ WhatsApp sent successfully (both image and PDF):', {
             phone: phone,
             provider: whatsappResult.provider,
-            messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId,
+            imageMessageId: whatsappResult.imageMessageId,
+            pdfMessageId: whatsappResult.pdfMessageId,
             ticketId: ticket?.ticketId
           });
         } else {
           // Green API failed - set status to confirmation_failed
           console.error('❌ WhatsApp send failed:', whatsappResult.error);
+          const errorDetails = JSON.stringify(whatsappResult.details || whatsappResult.error);
           await db.query('UPDATE bookings SET status = $1, whatsapp_sent = false, whatsapp_message_id = $2, confirmation_error = $3, updated_at = now() WHERE id=$4', 
-            ['confirmation_failed', 'FAILED-' + Date.now(), whatsappResult.error, updatedBooking.id]);
+            ['confirmation_failed', 'FAILED-' + Date.now(), errorDetails, updatedBooking.id]);
           console.log('❌ Booking status set to confirmation_failed due to WhatsApp failure');
           
           // Return error to admin UI
@@ -2055,6 +2092,7 @@ app.post('/api/confirm-payment', async (req, res) => {
             success: false, 
             message: 'Failed to send ticket via WhatsApp', 
             error: whatsappResult.error,
+            details: whatsappResult.details,
             bookingId: updatedBooking.booking_string_id || updatedBooking.id
           });
         }
@@ -2098,9 +2136,11 @@ app.post('/api/confirm-payment', async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Оплата подтверждена и билет отправлен в WhatsApp',
+      message: 'Оплата подтверждена и билет (изображение + PDF) отправлен в WhatsApp',
       ticketId: ticket && ticket.ticketId || null,
-      ticketPath: ticket && ticket.path || null
+      ticketPath: publicPdfUrl || (ticket && ticket.path) || null,
+      ticketImagePath: publicImageUrl || (ticket && ticket.imagePath) || null,
+      whatsappResult: whatsappResult
     });
   } catch (err) {
     try { await db.query('ROLLBACK'); } catch(e) {}

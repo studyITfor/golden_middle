@@ -3,6 +3,7 @@ const fs = require('fs');
 const path = require('path');
 const axios = require('axios');
 const puppeteer = require('puppeteer');
+const { createClient } = require('@supabase/supabase-js');
 
 const config = require('./config');
 
@@ -11,16 +12,30 @@ const GREEN_API_MEDIA_URL = process.env.GREEN_API_MEDIA_URL;
 const ID_INSTANCE = process.env.GREEN_API_ID_INSTANCE || config.whatsapp.id;
 const TOKEN = process.env.GREEN_API_TOKEN || config.whatsapp.token;
 
-// Generate ticket file (PDF)
+// Supabase configuration
+const SUPABASE_URL = process.env.SUPABASE_URL;
+const SUPABASE_KEY = process.env.SUPABASE_KEY;
+let supabase = null;
+
+if (SUPABASE_URL && SUPABASE_KEY) {
+  supabase = createClient(SUPABASE_URL, SUPABASE_KEY);
+  console.log('✅ Supabase client initialized for ticket storage');
+} else {
+  console.log('⚠️ Supabase credentials not found, using local storage fallback');
+}
+
+// Generate ticket files (PDF and Image)
 async function generateTicketForBooking(booking) {
   const os = require('os');
   const tempDir = os.tmpdir();
   const ticketId = booking.ticket_id || ('T' + Date.now().toString(36).toUpperCase());
-  const filename = `${ticketId}.pdf`;
-  const filepath = path.join(tempDir, filename);
+  const pdfFilename = `${ticketId}.pdf`;
+  const imgFilename = `${ticketId}.png`;
+  const pdfFilepath = path.join(tempDir, pdfFilename);
+  const imgFilepath = path.join(tempDir, imgFilename);
 
-  // Create PDF ticket if not exists
-  if (!fs.existsSync(filepath)) {
+  // Create both PDF and image tickets if not exist
+  if (!fs.existsSync(pdfFilepath) || !fs.existsSync(imgFilepath)) {
     try {
       const browser = await puppeteer.launch({ 
         headless: true,
@@ -45,17 +60,29 @@ async function generateTicketForBooking(booking) {
         }
       });
       
+      // Generate PNG image
+      const imgBuffer = await page.screenshot({
+        type: 'png',
+        fullPage: true,
+        quality: 100
+      });
+      
       await browser.close();
       
-      // Save PDF file
-      fs.writeFileSync(filepath, pdfBuffer);
+      // Save both files
+      fs.writeFileSync(pdfFilepath, pdfBuffer);
+      fs.writeFileSync(imgFilepath, imgBuffer);
       
-      console.log('✅ PDF ticket generated successfully:', { ticketId, filepath });
+      console.log('✅ PDF and Image tickets generated successfully:', { 
+        ticketId, 
+        pdfFilepath, 
+        imgFilepath 
+      });
     } catch (error) {
-      console.error('❌ Error generating PDF ticket:', error);
+      console.error('❌ Error generating ticket files:', error);
       // Fallback to text file
       const txtFilename = `${ticketId}.txt`;
-      const txtFilepath = path.join(ticketsDir, txtFilename);
+      const txtFilepath = path.join(tempDir, txtFilename);
       const contentLines = [
         `🎫 TICKET CONFIRMED 🎫`,
         ``,
@@ -74,11 +101,52 @@ async function generateTicketForBooking(booking) {
         `Thank you for your booking! 🎓`
       ];
       fs.writeFileSync(txtFilepath, contentLines.join('\n'), 'utf8');
-      return { ticketId, path: `/tickets/${txtFilename}`, localPath: txtFilepath, isTemp: true };
+      return { 
+        ticketId, 
+        path: `/tickets/${txtFilename}`, 
+        localPath: txtFilepath, 
+        isTemp: true,
+        imagePath: null,
+        imageLocalPath: null
+      };
     }
   }
 
-  return { ticketId, path: `/tickets/${filename}`, localPath: filepath, isTemp: true };
+  return { 
+    ticketId, 
+    path: `/tickets/${pdfFilename}`, 
+    localPath: pdfFilepath, 
+    isTemp: true,
+    imagePath: `/tickets/${imgFilename}`,
+    imageLocalPath: imgFilepath
+  };
+}
+
+// Upload file to Supabase storage
+async function uploadFileToSupabase(localPath, destKey) {
+  if (!supabase) {
+    throw new Error('Supabase not configured');
+  }
+  
+  try {
+    const file = fs.createReadStream(localPath);
+    const { data, error } = await supabase.storage
+      .from('tickets')
+      .upload(destKey, file, { upsert: true });
+    
+    if (error) {
+      throw error;
+    }
+    
+    const { data: publicData } = supabase.storage
+      .from('tickets')
+      .getPublicUrl(destKey);
+    
+    return publicData.publicUrl;
+  } catch (error) {
+    console.error('❌ Error uploading to Supabase:', error);
+    throw error;
+  }
 }
 
 // Generate HTML content for PDF ticket matching the provided design
@@ -282,6 +350,105 @@ function generateTicketHTML(booking, ticketId) {
   `;
 }
 
+// Send both image and PDF via Green API (with fallback to text)
+async function sendBothTicketFiles(phone, ticket) {
+  const cleanPhone = phone.replace(/[^\d]/g, '');
+  const chatId = cleanPhone + '@c.us';
+  
+  console.log('📱 Sending ticket files to:', phone, 'chatId:', chatId);
+  console.log('📋 Ticket details:', { 
+    ticketId: ticket.ticketId, 
+    pdfUrl: ticket.pdfUrl, 
+    imageUrl: ticket.imageUrl,
+    hasPdf: !!ticket.pdfUrl,
+    hasImage: !!ticket.imageUrl
+  });
+  
+  try {
+    const results = [];
+    
+    // Send image if available
+    if (ticket.imageUrl) {
+      console.log('📷 Sending ticket image...');
+      const imagePayload = {
+        chatId: chatId,
+        urlFile: ticket.imageUrl,
+        fileName: `ticket_${ticket.ticketId}.png`,
+        caption: '🎫 Ваш билет (изображение)'
+      };
+      
+      const imageResponse = await axios.post(
+        `${GREEN_API_URL}/waInstance${ID_INSTANCE}/sendFileByUrl/${TOKEN}`,
+        imagePayload,
+        { timeout: 15000 }
+      );
+      
+      console.log('✅ Image sent successfully:', imageResponse.data);
+      results.push({ type: 'image', success: true, messageId: imageResponse.data?.idMessage });
+      
+      // Wait 1 second between sends
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    }
+    
+    // Send PDF if available
+    if (ticket.pdfUrl) {
+      console.log('📄 Sending ticket PDF...');
+      const pdfPayload = {
+        chatId: chatId,
+        urlFile: ticket.pdfUrl,
+        fileName: `ticket_${ticket.ticketId}.pdf`,
+        caption: '🎫 Ваш билет (PDF документ)'
+      };
+      
+      const pdfResponse = await axios.post(
+        `${GREEN_API_URL}/waInstance${ID_INSTANCE}/sendFileByUrl/${TOKEN}`,
+        pdfPayload,
+        { timeout: 15000 }
+      );
+      
+      console.log('✅ PDF sent successfully:', pdfResponse.data);
+      results.push({ type: 'pdf', success: true, messageId: pdfResponse.data?.idMessage });
+    }
+    
+    // If no files available, send text message
+    if (!ticket.pdfUrl && !ticket.imageUrl) {
+      console.log('📝 No files available, sending text message...');
+      const textPayload = {
+        chatId: chatId,
+        message: `🎫 Ваш билет подтвержден!\n\nTicket ID: ${ticket.ticketId}\n\nСпасибо за бронирование!`
+      };
+      
+      const textResponse = await axios.post(
+        `${GREEN_API_URL}/waInstance${ID_INSTANCE}/sendMessage/${TOKEN}`,
+        textPayload,
+        { timeout: 15000 }
+      );
+      
+      console.log('✅ Text message sent successfully:', textResponse.data);
+      results.push({ type: 'text', success: true, messageId: textResponse.data?.idMessage });
+    }
+    
+    return {
+      success: true,
+      message: `Ticket sent successfully via Green API (${results.length} items)`,
+      provider: 'Green API',
+      results: results,
+      imageMessageId: results.find(r => r.type === 'image')?.messageId,
+      pdfMessageId: results.find(r => r.type === 'pdf')?.messageId,
+      textMessageId: results.find(r => r.type === 'text')?.messageId
+    };
+    
+  } catch (error) {
+    console.error('❌ Error sending ticket files:', error);
+    return {
+      success: false,
+      error: error.message,
+      provider: 'Green API',
+      details: error.response?.data || error.message
+    };
+  }
+}
+
 async function sendWhatsAppTicket(phone, ticket) {
   console.log('📱 Starting WhatsApp send process:', {
     phone: phone,
@@ -463,4 +630,9 @@ async function logWhatsAppSend(phone, ticket, result) {
   });
 }
 
-module.exports = { generateTicketForBooking, sendWhatsAppTicket };
+module.exports = { 
+  generateTicketForBooking, 
+  sendWhatsAppTicket, 
+  sendBothTicketFiles, 
+  uploadFileToSupabase 
+};
