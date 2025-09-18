@@ -168,6 +168,29 @@ app.use('/tickets', express.static(TICKETS_PATH, {
 console.log('📁 Tickets path:', TICKETS_PATH);
 console.log('📁 Tickets exists:', fs.existsSync(TICKETS_PATH));
 
+// Debug endpoint to test tickets folder access
+app.get('/debug/tickets', (req, res) => {
+  try {
+    const ticketsDir = path.join(__dirname, 'tickets');
+    const files = fs.readdirSync(ticketsDir);
+    const pdfFiles = files.filter(file => file.endsWith('.pdf'));
+    
+    res.json({
+      success: true,
+      ticketsPath: ticketsDir,
+      ticketsExists: fs.existsSync(ticketsDir),
+      totalFiles: files.length,
+      pdfFiles: pdfFiles,
+      sampleFile: pdfFiles[0] || null
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Explicit HTML routes with error handling
 app.get('/', (req, res) => {
     const indexPath = path.join(FRONTEND_PATH, 'index.html');
