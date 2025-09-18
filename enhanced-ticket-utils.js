@@ -561,11 +561,12 @@ async function sendWhatsAppTicket(phone, ticket) {
         }
       }
       
-      // Construct full public URL for the PDF
+      // Construct full public URL for the PDF using direct endpoint (Railway static routes don't work)
       const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://upbeat-compassion-production.up.railway.app';
-      const publicPdfUrl = `${baseUrl}${ticket.path}`;
+      const filename = ticket.path.split('/').pop(); // Extract filename from /tickets/filename.pdf
+      const publicPdfUrl = `${baseUrl}/pdf/${filename}`;
       
-      console.log('🌐 Public PDF URL:', publicPdfUrl);
+      console.log('🌐 Public PDF URL (direct endpoint):', publicPdfUrl);
       console.log('📁 Local PDF path:', ticket.localPath);
       console.log('✅ PDF file exists locally:', ticket.localPath ? fs.existsSync(ticket.localPath) : 'No local path');
       
@@ -691,10 +692,11 @@ async function testPDFDelivery(phone = '+996555123456') {
     const stats = fs.statSync(ticket.localPath);
     console.log(`📊 File size: ${(stats.size / 1024).toFixed(2)} KB`);
     
-    // 3. Test local URL access
+    // 3. Test local URL access using direct endpoint
     const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://upbeat-compassion-production.up.railway.app';
-    const publicUrl = `${baseUrl}${ticket.path}`;
-    console.log('🌐 Public URL:', publicUrl);
+    const filename = ticket.path.split('/').pop();
+    const publicUrl = `${baseUrl}/pdf/${filename}`;
+    console.log('🌐 Public URL (direct endpoint):', publicUrl);
     
     // 4. Test public URL accessibility with detailed checks
     console.log('🔍 Testing public URL accessibility...');
