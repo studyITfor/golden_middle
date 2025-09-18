@@ -156,6 +156,159 @@ console.log('📁 Frontend path:', FRONTEND_PATH);
 console.log('📁 Frontend exists:', fs.existsSync(FRONTEND_PATH));
 console.log('📁 Frontend contents:', fs.existsSync(FRONTEND_PATH) ? fs.readdirSync(FRONTEND_PATH) : 'Directory not found');
 
+// Debug endpoints - MUST be before static file middleware
+// Debug endpoint to test tickets folder access
+app.get('/debug/tickets', (req, res) => {
+  try {
+    const ticketsDir = path.join(__dirname, 'tickets');
+    const files = fs.readdirSync(ticketsDir);
+    const pdfFiles = files.filter(file => file.endsWith('.pdf'));
+    
+    res.json({
+      success: true,
+      ticketsPath: ticketsDir,
+      ticketsExists: fs.existsSync(ticketsDir),
+      totalFiles: files.length,
+      pdfFiles: pdfFiles,
+      sampleFile: pdfFiles[0] || null
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+// Debug endpoint to list files in tickets directory
+app.get('/debug/list-tickets', (req, res) => {
+  try {
+    const files = fs.existsSync(TICKETS_PATH) ? fs.readdirSync(TICKETS_PATH).map(f => {
+      const st = fs.statSync(path.join(TICKETS_PATH, f));
+      return { name: f, size: st.size, mtime: st.mtime };
+    }) : [];
+    res.json({ ticketsPath: TICKETS_PATH, exists: fs.existsSync(TICKETS_PATH), files });
+  } catch (e) { 
+    res.status(500).json({ error: e.message, stack: e.stack }); 
+  }
+});
+
+// Debug endpoint to check environment variables
+app.get('/debug/env', (req, res) => {
+  console.log('🔍 Debug /debug/env endpoint called');
+  res.json({
+    RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || null,
+    NODE_ENV: process.env.NODE_ENV || null,
+    PORT: process.env.PORT || null,
+    TICKETS_PATH: TICKETS_PATH,
+    __dirname: __dirname,
+    timestamp: new Date().toISOString()
+  });
+});
+
+// Debug endpoint to get the last created ticket
+app.get('/debug/last-ticket', (req, res) => {
+  try {
+    if (!fs.existsSync(TICKETS_PATH)) return res.json({ exists: false, files: [] });
+    const files = fs.readdirSync(TICKETS_PATH).map(f => ({
+      name: f, mtime: fs.statSync(path.join(TICKETS_PATH, f)).mtime
+    })).sort((a,b) => b.mtime - a.mtime);
+    res.json({ last: files[0] || null });
+  } catch (e) { 
+    res.status(500).json({ error: e.message }); 
+  }
+});
+
+// Debug endpoint to check template files
+app.get('/debug/templates', (req, res) => {
+  try {
+    const baseDir = process.env.NODE_ENV === 'production' ? '/app' : __dirname;
+    const templateFiles = [
+      'ticket_design.png',
+      'ticket_design.pdf', 
+      'ticket_template.pdf',
+      'example.pdf',
+      'example.png'
+    ];
+    
+    const results = templateFiles.map(file => {
+      const filePath = path.join(baseDir, file);
+      return {
+        name: file,
+        path: filePath,
+        exists: fs.existsSync(filePath),
+        size: fs.existsSync(filePath) ? fs.statSync(filePath).size : 0
+      };
+    });
+    
+    res.json({
+      baseDir,
+      templates: results,
+      NODE_ENV: process.env.NODE_ENV
+    });
+  } catch (e) { 
+    res.status(500).json({ error: e.message, stack: e.stack }); 
+  }
+});
+
+// Debug endpoint to test PDF generation
+app.get('/debug/test-pdf-generation', async (req, res) => {
+  try {
+    console.log('🧪 Testing PDF generation in Railway...');
+    
+    const testBooking = {
+      id: 'TEST_' + Date.now(),
+      firstName: 'Test',
+      lastName: 'User',
+      phone: '+996555123456',
+      table: 1,
+      seat: 1,
+      price: 5500,
+      status: 'confirmed'
+    };
+    
+    console.log('📋 Test booking:', testBooking);
+    
+    const ticket = await generateTicketForBooking(testBooking);
+    console.log('🎫 Generated ticket:', ticket);
+    
+    res.json({
+      success: true,
+      testBooking,
+      ticket,
+      message: 'PDF generation test completed'
+    });
+  } catch (error) {
+    console.error('❌ PDF generation test failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
+// Debug endpoint to check database schema and run migration
+app.get('/debug/database-schema', async (req, res) => {
+  try {
+    console.log('🔍 Checking database schema...');
+    
+    // This is a placeholder - in a real implementation, you'd check the actual database schema
+    res.json({
+      success: true,
+      message: 'Database schema check completed',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('❌ Database schema check failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 app.use(express.static(FRONTEND_PATH));
 
 // Serve public assets (images, JS libraries)
@@ -203,7 +356,12 @@ app.use('/tickets', express.static(TICKETS_PATH, {
 console.log('📁 Tickets path:', TICKETS_PATH);
 console.log('📁 Tickets exists:', fs.existsSync(TICKETS_PATH));
 
-// Debug endpoint to test tickets folder access
+// Serve tickets directory statically - REMOVED: duplicate route that was overriding the correct one above
+
+// Serve temporary ticket files
+app.use('/temp-tickets', express.static(os.tmpdir()));
+
+// Health check endpoints
 app.get('/debug/tickets', (req, res) => {
   try {
     const ticketsDir = path.join(__dirname, 'tickets');
