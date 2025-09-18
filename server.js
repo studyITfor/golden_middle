@@ -206,6 +206,67 @@ app.get('/debug/tickets', (req, res) => {
   }
 });
 
+// Debug endpoint to list files in both tickets directories
+app.get('/debug/list-tickets', (req, res) => {
+  try {
+    const ticketsDir1 = path.join(__dirname, 'tickets'); // /app/tickets
+    const ticketsDir2 = path.join(__dirname, '..', 'tickets'); // /tickets
+    
+    const dir1Exists = fs.existsSync(ticketsDir1);
+    const dir2Exists = fs.existsSync(ticketsDir2);
+    
+    let dir1Files = [];
+    let dir2Files = [];
+    
+    if (dir1Exists) {
+      dir1Files = fs.readdirSync(ticketsDir1).map(file => {
+        const filePath = path.join(ticketsDir1, file);
+        const stats = fs.statSync(filePath);
+        return {
+          name: file,
+          size: stats.size,
+          isFile: stats.isFile(),
+          modified: stats.mtime
+        };
+      });
+    }
+    
+    if (dir2Exists) {
+      dir2Files = fs.readdirSync(ticketsDir2).map(file => {
+        const filePath = path.join(ticketsDir2, file);
+        const stats = fs.statSync(filePath);
+        return {
+          name: file,
+          size: stats.size,
+          isFile: stats.isFile(),
+          modified: stats.mtime
+        };
+      });
+    }
+    
+    res.json({
+      success: true,
+      directories: {
+        '/app/tickets': {
+          path: ticketsDir1,
+          exists: dir1Exists,
+          files: dir1Files
+        },
+        '/tickets': {
+          path: ticketsDir2,
+          exists: dir2Exists,
+          files: dir2Files
+        }
+      }
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Debug endpoint to check template files
 app.get('/debug/templates', (req, res) => {
   try {
