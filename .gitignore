@@ -131,3 +131,30 @@ static-site/
 !README.md
 !DEPLOYMENT.md
 !API_TESTING.md
+
+# Large binary files that cause Railway snapshot issues
+*.pdf
+*.png
+*.jpg
+*.jpeg
+*.gif
+*.bmp
+*.tiff
+*.rar
+*.zip
+*.tar.gz
+*.7z
+
+# Ticket files (generated at runtime)
+tickets/
+backend/tickets/
+backend/*.pdf
+backend/*.png
+backend/*.jpg
+backend/*.jpeg
+
+# Template files (should be loaded from external storage)
+backend/example.pdf
+backend/Example.png
+backend/ticket_design.pdf
+backend/ticket_design.png
