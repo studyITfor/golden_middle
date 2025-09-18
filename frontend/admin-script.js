@@ -529,6 +529,18 @@ class AdminPanel {
             this.filterBookings();
         });
 
+        // Ticket management controls
+        document.getElementById('refreshTickets').addEventListener('click', () => {
+            this.loadTickets();
+        });
+
+        document.getElementById('scanTicketBtn').addEventListener('click', () => {
+            const ticketId = prompt('Введите ID билета для сканирования:');
+            if (ticketId) {
+                this.scanTicket(ticketId);
+            }
+        });
+
         // Modal controls
         document.getElementById('closePaymentModal').addEventListener('click', () => {
             this.hideModal('paymentModal');
@@ -2455,11 +2467,19 @@ Status: ${booking.status}
         
         const ticketData = {
             ticketId: formData.get('ticketId'),
+            bookingId: formData.get('bookingId'),
             holderName: formData.get('holderName'),
             table: parseInt(formData.get('table')),
             seat: parseInt(formData.get('seat')),
             status: formData.get('status')
         };
+
+        // Validate form data
+        if (!ticketData.ticketId || !ticketData.bookingId) {
+            this.showVerificationResult('error', 'Ошибка валидации', 
+                'Поля Ticket ID и Booking ID обязательны для заполнения');
+            return;
+        }
 
         try {
             const response = await fetch('/api/secure-tickets/add-manual', {
@@ -2473,11 +2493,13 @@ Status: ${booking.status}
             const data = await response.json();
 
             if (data.success) {
-                this.showVerificationResult('success', 'Ticket добавлен', 
-                    `Ticket ${ticketData.ticketId} успешно добавлен в систему`, data.data);
+                const action = data.isUpdate ? 'обновлен' : 'добавлен';
+                this.showVerificationResult('success', `Ticket ${action}`, 
+                    `Ticket ${ticketData.ticketId} успешно ${action} в систему`, data.data);
                 form.reset();
                 this.hideModal('addTicketModal');
                 this.refreshVerificationStats();
+                this.loadTickets(); // Refresh tickets table
             } else {
                 this.showVerificationResult('error', 'Ошибка добавления', 
                     data.error || 'Не удалось добавить билет');
@@ -2535,6 +2557,25 @@ Status: ${booking.status}
                 this.loadBookings();
                 this.updateStatistics();
                 this.generateHallPreview();
+            });
+
+            // Ticket management events
+            this.socket.on('ticket-scanned', (data) => {
+                console.log('📡 Received ticket scan update:', data);
+                this.showVerificationResult('success', 'Билет отсканирован', 
+                    `Статус: ${data.result.usageStatus}`, data.result);
+                this.loadTickets(); // Refresh tickets table
+            });
+
+            this.socket.on('ticket-updated', (data) => {
+                console.log('📡 Received ticket update:', data);
+                this.loadTickets(); // Refresh tickets table
+            });
+
+            this.socket.on('ticket-scan-error', (data) => {
+                console.log('📡 Received ticket scan error:', data);
+                this.showVerificationResult('error', 'Ошибка сканирования', 
+                    data.error || 'Не удалось отсканировать билет');
             });
 
             this.socket.on('seatBulkUpdate', (data) => {
@@ -2744,7 +2785,109 @@ Status: ${booking.status}
             }
         }, 5000);
     }
-}
+
+    // Ticket Management Functions
+    async loadTickets() {
+        try {
+            const response = await fetch('/api/secure-tickets/all');
+            const data = await response.json();
+            
+            if (data.success) {
+                this.displayTickets(data.data);
+            } else {
+                console.error('Error loading tickets:', data.error);
+            }
+        } catch (error) {
+            console.error('Error loading tickets:', error);
+        }
+    }
+
+    displayTickets(tickets) {
+        const tbody = document.getElementById('ticketsTableBody');
+        tbody.innerHTML = '';
+
+        tickets.forEach(ticket => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+                <td><code>${ticket.ticketId}</code></td>
+                <td><code>${ticket.bookingId || 'N/A'}</code></td>
+                <td>${ticket.holderName}</td>
+                <td>${ticket.table}</td>
+                <td>${ticket.seat}</td>
+                <td><span class="usage-status ${this.getUsageStatusClass(ticket.usageStatus)}">${ticket.usageStatus}</span></td>
+                <td>${ticket.verificationCount || 0}</td>
+                <td>${new Date(ticket.createdAt).toLocaleDateString('ru-RU')}</td>
+                <td>
+                    <div class="action-buttons">
+                        <button class="btn btn-sm btn-primary" onclick="adminPanel.scanTicket('${ticket.ticketId}')">
+                            <i class="fas fa-qrcode"></i> Сканировать
+                        </button>
+                        <button class="btn btn-sm btn-info" onclick="adminPanel.viewTicketDetails('${ticket.ticketId}')">
+                            <i class="fas fa-eye"></i> Подробности
+                        </button>
+                    </div>
+                </td>
+            `;
+            tbody.appendChild(row);
+        });
+    }
+
+    getUsageStatusClass(usageStatus) {
+        switch(usageStatus) {
+            case 'Не использован':
+                return 'status-unused';
+            case 'Использован впервые':
+                return 'status-first-use';
+            case 'Повторное использование':
+                return 'status-repeat-use';
+            default:
+                return 'status-unknown';
+        }
+    }
+
+    async scanTicket(ticketId) {
+        try {
+            // Emit Socket.IO event for real-time updates
+            if (this.socket) {
+                this.socket.emit('scan-ticket', {
+                    ticketId: ticketId,
+                    scannedBy: 'admin'
+                });
+            }
+
+            const response = await fetch('/api/secure-tickets/scan', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    ticketId: ticketId,
+                    scannedBy: 'admin'
+                })
+            });
+
+            const data = await response.json();
+
+            if (data.success) {
+                this.showVerificationResult('success', 'Билет отсканирован', 
+                    `Статус: ${data.data.usageStatus}`, data.data);
+                this.loadTickets(); // Refresh the tickets table
+            } else {
+                this.showVerificationResult('error', 'Ошибка сканирования', 
+                    data.error || 'Не удалось отсканировать билет');
+            }
+        } catch (error) {
+            console.error('Error scanning ticket:', error);
+            this.showVerificationResult('error', 'Ошибка сервера', 
+                'Не удалось отсканировать билет. Попробуйте еще раз.');
+        }
+    }
+
+    viewTicketDetails(ticketId) {
+        // This could open a modal with detailed ticket information
+        console.log('Viewing ticket details for:', ticketId);
+        // Implementation for detailed ticket view
+    }
 
 // Initialize admin panel
 let adminPanel;

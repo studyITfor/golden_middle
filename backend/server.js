@@ -2902,22 +2902,42 @@ app.post('/api/secure-tickets/add-manual', async (req, res) => {
     try {
         const ticketInfo = req.body;
         
+        // Validate required fields
         if (!ticketInfo.ticketId) {
             return res.status(400).json({ 
+                success: false,
                 error: 'Ticket ID is required' 
             });
         }
 
-        const newTicket = await secureTicketSystem.addTicketManually(ticketInfo);
+        if (!ticketInfo.bookingId) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Booking ID is required' 
+            });
+        }
+
+        // Validate ticket ID format (basic validation)
+        if (!/^[A-Z0-9]{8,}$/.test(ticketInfo.ticketId)) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Invalid ticket ID format. Must be at least 8 characters, letters and numbers only.' 
+            });
+        }
+
+        const ticketExists = secureTicketSystem.ticketExists(ticketInfo.ticketId);
+        const result = await secureTicketSystem.addTicketManually(ticketInfo);
         
         res.json({
             success: true,
-            message: 'Ticket added successfully',
-            data: newTicket
+            message: ticketExists ? 'Ticket updated successfully' : 'Ticket added successfully',
+            data: result,
+            isUpdate: ticketExists
         });
     } catch (error) {
         console.error('Error adding manual ticket:', error);
         res.status(500).json({ 
+            success: false,
             error: 'Failed to add manual ticket',
             details: error.message 
         });
@@ -2942,6 +2962,124 @@ app.get('/api/secure-tickets/exists/:ticketId', (req, res) => {
             details: error.message 
         });
     }
+});
+
+// Scan/use a ticket
+app.post('/api/secure-tickets/scan', async (req, res) => {
+    try {
+        const { ticketId, scannedBy = 'admin' } = req.body;
+        
+        if (!ticketId) {
+            return res.status(400).json({ 
+                error: 'Ticket ID is required' 
+            });
+        }
+
+        const result = await secureTicketSystem.scanTicket(ticketId, scannedBy);
+        
+        res.json({
+            success: true,
+            message: 'Ticket scanned successfully',
+            data: result
+        });
+    } catch (error) {
+        console.error('Error scanning ticket:', error);
+        res.status(500).json({ 
+            error: 'Failed to scan ticket',
+            details: error.message 
+        });
+    }
+});
+
+// Get ticket usage status
+app.get('/api/secure-tickets/usage-status/:ticketId', (req, res) => {
+    try {
+        const { ticketId } = req.params;
+        const usageStatus = secureTicketSystem.getTicketUsageStatus(ticketId);
+        
+        res.json({
+            success: true,
+            ticketId: ticketId,
+            usageStatus: usageStatus
+        });
+    } catch (error) {
+        console.error('Error getting ticket usage status:', error);
+        res.status(500).json({ 
+            error: 'Failed to get ticket usage status',
+            details: error.message 
+        });
+    }
+});
+
+// Get all tickets with usage status
+app.get('/api/secure-tickets/all', (req, res) => {
+    try {
+        const tickets = secureTicketSystem.getAllTickets();
+        const ticketsWithStatus = Object.keys(tickets).map(ticketId => ({
+            ...tickets[ticketId],
+            usageStatus: secureTicketSystem.getTicketUsageStatus(ticketId)
+        }));
+        
+        res.json({
+            success: true,
+            data: ticketsWithStatus
+        });
+    } catch (error) {
+        console.error('Error getting all tickets:', error);
+        res.status(500).json({ 
+            error: 'Failed to get tickets',
+            details: error.message 
+        });
+    }
+});
+
+// Socket.IO events for ticket management
+io.on('connection', (socket) => {
+    console.log('🔌 Client connected to ticket management:', socket.id);
+    
+    // Join admin room for ticket updates
+    socket.on('join-admin', () => {
+        socket.join('admins');
+        console.log('👤 Admin joined ticket management room');
+    });
+    
+    // Handle ticket scanning events
+    socket.on('scan-ticket', async (data) => {
+        try {
+            const { ticketId, scannedBy = 'admin' } = data;
+            const result = await secureTicketSystem.scanTicket(ticketId, scannedBy);
+            
+            // Emit to all admins
+            io.to('admins').emit('ticket-scanned', {
+                ticketId,
+                result,
+                timestamp: new Date().toISOString()
+            });
+            
+            console.log(`📡 Ticket scan event emitted for ${ticketId}`);
+        } catch (error) {
+            socket.emit('ticket-scan-error', {
+                error: error.message,
+                ticketId: data.ticketId
+            });
+        }
+    });
+    
+    // Handle ticket addition events
+    socket.on('ticket-added', (ticketData) => {
+        // Emit to all admins
+        io.to('admins').emit('ticket-updated', {
+            type: 'added',
+            ticket: ticketData,
+            timestamp: new Date().toISOString()
+        });
+        
+        console.log(`📡 Ticket addition event emitted for ${ticketData.ticketId}`);
+    });
+    
+    socket.on('disconnect', () => {
+        console.log('🔌 Client disconnected from ticket management:', socket.id);
+    });
 });
 
 // Test endpoint to manually trigger seat updates

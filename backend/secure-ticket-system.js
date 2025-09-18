@@ -292,14 +292,16 @@ class SecureTicketSystem {
                 throw new Error('Ticket ID is required');
             }
 
-            // Check if ticket already exists
+            // Check if ticket already exists - update instead of throwing error
             if (this.ticketsDatabase[ticketInfo.ticketId]) {
-                throw new Error('Ticket with this ID already exists');
+                console.log('⚠️ Ticket already exists, updating record...');
+                return this.updateExistingTicket(ticketInfo);
             }
 
             // Create new ticket entry
             const newTicket = {
                 ticketId: ticketInfo.ticketId,
+                bookingId: ticketInfo.bookingId || null,
                 holderName: ticketInfo.holderName || 'Unknown Holder',
                 table: ticketInfo.table || 1,
                 seat: ticketInfo.seat || 1,
@@ -313,6 +315,8 @@ class SecureTicketSystem {
                 createdBy: ticketInfo.createdBy || 'manual-admin',
                 createdAt: new Date().toISOString(),
                 status: ticketInfo.status || 'active',
+                used: false,
+                firstScan: null,
                 usedAt: null,
                 usedBy: null,
                 verificationCount: 0
@@ -330,6 +334,41 @@ class SecureTicketSystem {
             return newTicket;
         } catch (error) {
             console.error('❌ Error manually adding ticket:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Update existing ticket with new information
+     */
+    async updateExistingTicket(ticketInfo) {
+        try {
+            console.log('🔄 Updating existing ticket...');
+            
+            const existingTicket = this.ticketsDatabase[ticketInfo.ticketId];
+            
+            // Update only non-critical fields to preserve usage tracking
+            if (ticketInfo.bookingId) existingTicket.bookingId = ticketInfo.bookingId;
+            if (ticketInfo.holderName) existingTicket.holderName = ticketInfo.holderName;
+            if (ticketInfo.table) existingTicket.table = ticketInfo.table;
+            if (ticketInfo.seat) existingTicket.seat = ticketInfo.seat;
+            if (ticketInfo.status) existingTicket.status = ticketInfo.status;
+            
+            // Update timestamp
+            existingTicket.updatedAt = new Date().toISOString();
+            
+            // Save to database
+            this.ticketsDatabase[ticketInfo.ticketId] = existingTicket;
+            this.saveTicketsDatabase();
+
+            console.log('✅ Ticket updated successfully');
+            console.log(`🎫 Ticket ID: ${existingTicket.ticketId}`);
+            console.log(`👤 Holder: ${existingTicket.holderName}`);
+            console.log(`🪑 Seat: Table ${existingTicket.table}, Seat ${existingTicket.seat}`);
+
+            return existingTicket;
+        } catch (error) {
+            console.error('❌ Error updating ticket:', error.message);
             throw error;
         }
     }
@@ -501,6 +540,83 @@ class SecureTicketSystem {
             used: tickets.filter(t => t.status === 'used').length,
             cancelled: tickets.filter(t => t.status === 'cancelled').length
         };
+    }
+
+    /**
+     * Scan/use a ticket and track usage status
+     */
+    async scanTicket(ticketId, scannedBy = 'admin') {
+        try {
+            console.log(`🔍 Scanning ticket: ${ticketId}`);
+            
+            // Check if ticket exists
+            if (!this.ticketsDatabase[ticketId]) {
+                throw new Error('Ticket not found');
+            }
+
+            const ticket = this.ticketsDatabase[ticketId];
+            const now = new Date().toISOString();
+            
+            // Determine usage status
+            let usageStatus;
+            if (!ticket.used) {
+                // First time usage
+                ticket.used = true;
+                ticket.firstScan = now;
+                ticket.usedAt = now;
+                ticket.usedBy = scannedBy;
+                ticket.verificationCount = 1;
+                usageStatus = 'Использован впервые';
+                console.log('✅ First time ticket usage recorded');
+            } else {
+                // Repeat usage
+                ticket.verificationCount = (ticket.verificationCount || 0) + 1;
+                usageStatus = 'Повторное использование';
+                console.log('⚠️ Repeat ticket usage detected');
+            }
+
+            // Update ticket
+            ticket.lastScannedAt = now;
+            ticket.lastScannedBy = scannedBy;
+            
+            // Save to database
+            this.ticketsDatabase[ticketId] = ticket;
+            this.saveTicketsDatabase();
+
+            console.log(`🎫 Ticket ${ticketId} scanned by ${scannedBy}`);
+            console.log(`📊 Usage status: ${usageStatus}`);
+            console.log(`🔢 Verification count: ${ticket.verificationCount}`);
+
+            return {
+                success: true,
+                ticket: ticket,
+                usageStatus: usageStatus,
+                isFirstUse: !ticket.used || ticket.verificationCount === 1,
+                verificationCount: ticket.verificationCount
+            };
+
+        } catch (error) {
+            console.error('❌ Error scanning ticket:', error.message);
+            throw error;
+        }
+    }
+
+    /**
+     * Get ticket usage status for display
+     */
+    getTicketUsageStatus(ticketId) {
+        const ticket = this.ticketsDatabase[ticketId];
+        if (!ticket) {
+            return 'Билет не найден';
+        }
+        
+        if (!ticket.used) {
+            return 'Не использован';
+        } else if (ticket.verificationCount === 1) {
+            return 'Использован впервые';
+        } else {
+            return 'Повторное использование';
+        }
     }
 }
 

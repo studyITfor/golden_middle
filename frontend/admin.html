@@ -265,6 +265,44 @@
                     </div>
                 </div>
 
+                <!-- Ticket Management Section -->
+                <div class="ticket-management">
+                    <div class="section-header">
+                        <h2>Управление билетами</h2>
+                        <div class="management-controls">
+                            <button class="btn btn-info" id="refreshTickets">
+                                <i class="fas fa-sync"></i>
+                                Обновить
+                            </button>
+                            <button class="btn btn-warning" id="scanTicketBtn">
+                                <i class="fas fa-qrcode"></i>
+                                Сканировать билет
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <div class="tickets-table-container">
+                        <table class="tickets-table" id="ticketsTable">
+                            <thead>
+                                <tr>
+                                    <th>ID билета</th>
+                                    <th>ID бронирования</th>
+                                    <th>Держатель</th>
+                                    <th>Стол</th>
+                                    <th>Место</th>
+                                    <th>Статус использования</th>
+                                    <th>Количество сканирований</th>
+                                    <th>Дата создания</th>
+                                    <th>Действия</th>
+                                </tr>
+                            </thead>
+                            <tbody id="ticketsTableBody">
+                                <!-- Tickets will be populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
                 <!-- Hall Layout Management -->
                 <div class="hall-management">
                     <div class="section-header">
@@ -394,6 +432,10 @@
                     <div class="form-group">
                         <label for="ticketId">ID билета *</label>
                         <input type="text" id="ticketId" name="ticketId" placeholder="TKMFCEZV2YEI7DSN" required>
+                    </div>
+                    <div class="form-group">
+                        <label for="bookingId">ID бронирования *</label>
+                        <input type="text" id="bookingId" name="bookingId" placeholder="BKM56CDVUAAM" required>
                     </div>
                     <div class="form-group">
                         <label for="holderName">Имя держателя *</label>
