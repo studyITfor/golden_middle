@@ -628,8 +628,6 @@ async function sendWhatsAppTicket(phone, ticket) {
       console.log('🔍 Debug ticket object:', {
         path: ticket.path,
         ticketId: ticket.ticketId,
-        filename: filename,
-        baseUrl: baseUrl,
         publicPdfUrl: publicPdfUrl
       });
       
