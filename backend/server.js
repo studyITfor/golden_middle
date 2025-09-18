@@ -2840,6 +2840,28 @@ app.get('/api/seat-statuses', async (req, res) => {
     }
 });
 
+// Get all tickets with usage status (must be before /:ticketId route)
+app.get('/api/secure-tickets/all', (req, res) => {
+    try {
+        const tickets = secureTicketSystem.getAllTickets();
+        const ticketsWithStatus = Object.keys(tickets).map(ticketId => ({
+            ...tickets[ticketId],
+            usageStatus: secureTicketSystem.getTicketUsageStatus(ticketId)
+        }));
+        
+        res.json({
+            success: true,
+            data: ticketsWithStatus
+        });
+    } catch (error) {
+        console.error('Error getting all tickets:', error);
+        res.status(500).json({ 
+            error: 'Failed to get tickets',
+            details: error.message 
+        });
+    }
+});
+
 // Get ticket information
 app.get('/api/secure-tickets/:ticketId', (req, res) => {
     try {
@@ -3014,27 +3036,6 @@ app.get('/api/secure-tickets/usage-status/:ticketId', (req, res) => {
     }
 });
 
-// Get all tickets with usage status
-app.get('/api/secure-tickets/all', (req, res) => {
-    try {
-        const tickets = secureTicketSystem.getAllTickets();
-        const ticketsWithStatus = Object.keys(tickets).map(ticketId => ({
-            ...tickets[ticketId],
-            usageStatus: secureTicketSystem.getTicketUsageStatus(ticketId)
-        }));
-        
-        res.json({
-            success: true,
-            data: ticketsWithStatus
-        });
-    } catch (error) {
-        console.error('Error getting all tickets:', error);
-        res.status(500).json({ 
-            error: 'Failed to get tickets',
-            details: error.message 
-        });
-    }
-});
 
 // Socket.IO events for ticket management
 io.on('connection', (socket) => {
