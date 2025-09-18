@@ -85,17 +85,27 @@ async function generateTicketFromTemplate(booking, templatePath, outputPath) {
     const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
+    // Extract real booking data
+    const firstName = booking.first_name || booking.firstName || 'Guest';
+    const lastName = booking.last_name || booking.lastName || '';
+    const fullName = lastName ? `${firstName} ${lastName}` : firstName;
+    const table = booking.table_number || booking.table || 'N/A';
+    const seat = booking.seat_number || booking.seat || 'N/A';
+    const ticketId = booking.ticket_id || booking.ticketId || 'N/A';
+
+    console.log('✏️ Using real booking data:', { fullName, table, seat, ticketId });
+
     // Generate English text for PDF compatibility (Russian text will be sent via WhatsApp)
-    const ticketText = `Hello, ${booking.first_name || 'Guest'}!
+    const ticketText = `Hello, ${fullName}!
 
 Your golden ticket for GOLDENMIDDLE is ready!
 
 Date: 26 October 2025
 Time: 18:00
 Place: Asman
-Your seat: Table ${booking.table_number || booking.table || 'N/A'}, Seat ${booking.seat_number || booking.seat || 'N/A'}
+Your seat: Table ${table}, Seat ${seat}
 Price: 5500 Som
-Ticket ID: ${booking.ticket_id || 'N/A'}
+Ticket ID: ${ticketId}
 
 Ticket is attached. Please show it at the event entrance!
 
@@ -111,9 +121,9 @@ Welcome to GOLDENMIDDLE!`;
       lineHeight: 16
     });
 
-    // Generate QR code
-    console.log('🔲 Generating QR code...');
-    const qrDataUrl = await QRCode.toDataURL(booking.ticket_id || 'N/A', {
+    // Generate QR code with real ticket ID
+    console.log('🔲 Generating QR code for ticket ID:', ticketId);
+    const qrDataUrl = await QRCode.toDataURL(ticketId, {
       width: 200,
       margin: 2,
       color: {
@@ -136,7 +146,7 @@ Welcome to GOLDENMIDDLE!`;
     });
 
     // Add ticket ID text near QR code
-    firstPage.drawText(booking.ticket_id || 'N/A', {
+    firstPage.drawText(ticketId, {
       x: width - qrSize - 30,
       y: 20,
       size: 10,
@@ -416,7 +426,7 @@ async function sendWhatsAppTicket(phone, ticket) {
   console.log('📱 Sending WhatsApp ticket to:', phone, 'chatId:', chatId);
   
   try {
-    // First send the Russian text message with emojis
+    // First send the Russian text message with emojis (exact format as specified)
     const russianMessage = `🎫 Здравствуйте, ${ticket.firstName || 'Guest'}!
 
 🎉 Ваш золотой билет на GOLDENMIDDLE готов!
