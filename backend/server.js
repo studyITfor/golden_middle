@@ -157,6 +157,9 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // Serve images from public/images directory at /images/ path
 app.use('/images', express.static(path.join(__dirname, '..', 'public', 'images')));
 
+// Serve JavaScript files from public/js directory at /js/ path
+app.use('/js', express.static(path.join(__dirname, '..', 'public', 'js')));
+
 // Serve tickets directory statically
 app.use('/tickets', express.static(path.join(__dirname, '..', 'tickets')));
 
