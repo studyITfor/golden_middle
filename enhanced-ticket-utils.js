@@ -539,11 +539,24 @@ async function sendWhatsAppTicket(phone, ticket) {
     if (ticket.path) {
       console.log('📄 Sending PDF ticket...');
       
+      // Verify PDF file exists locally before sending
+      if (ticket.localPath && !fs.existsSync(ticket.localPath)) {
+        console.error('❌ PDF file does not exist locally:', ticket.localPath);
+        return {
+          success: false,
+          error: 'PDF file not found locally',
+          provider: 'Green API',
+          details: `Local file not found: ${ticket.localPath}`
+        };
+      }
+      
       // Construct full public URL for the PDF
       const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://upbeat-compassion-production.up.railway.app';
       const publicPdfUrl = `${baseUrl}${ticket.path}`;
       
       console.log('🌐 Public PDF URL:', publicPdfUrl);
+      console.log('📁 Local PDF path:', ticket.localPath);
+      console.log('✅ PDF file exists locally:', ticket.localPath ? fs.existsSync(ticket.localPath) : 'No local path');
       
       const pdfPayload = {
         chatId: chatId,
