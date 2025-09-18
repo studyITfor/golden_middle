@@ -1,4 +1,4 @@
-# Dependencies
+data# Dependencies
 node_modules/
 npm-debug.log*
 yarn-debug.log*
@@ -10,7 +10,7 @@ pids
 *.seed
 *.pid.lock
 
-# Coverage directory used by tools like istanbul
+# Coverage directory
 coverage/
 *.lcov
 
@@ -76,14 +76,9 @@ jspm_packages/
 dist
 
 # Gatsby files
-# Игнорируем кэш, логи и лишние папки
-node_modules
-npm-debug.log
-
-# Игнорируем всё в public кроме images
+.cache/
 public/*
 !public/images/
-
 
 # Storybook build outputs
 .out
@@ -112,22 +107,30 @@ logs
 ehthumbs.db
 Thumbs.db
 
-# Railway
-.railway/
+# Git
+.git/
+.gitignore
 
-# Vercel
-.vercel/
+# Documentation
+*.md
+!README.md
 
 # Backup files
 backup-removed-files/
 FINAL_CLEANUP_SUMMARY.md
 PROJECT_CLEANUP_REPORT.md
 
-# Static site (we're deploying the main app)
+# Static site
 static-site/
 
-# Documentation files (keep README.md)
-*.md
-!README.md
-!DEPLOYMENT.md
-!API_TESTING.md
+# Railway
+.railway/
+
+# Vercel
+.vercel/
+
+# Test files
+test-*
+*test*
+scripts/
+
