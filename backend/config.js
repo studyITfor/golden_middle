@@ -9,7 +9,7 @@ module.exports = {
 
     // Server Configuration
     server: {
-        port: process.env.PORT || 3000
+        port: process.env.PORT || 8080
     },
 
     // Event Information

@@ -138,13 +138,18 @@ Thank you for your booking! 🎓`;
 app.use(cors());
 app.use(express.json());
 
-// Set static folder to repo/frontend
-const FRONTEND_PATH = path.resolve(__dirname, '..', 'frontend');
+// Set static folder to backend/frontend
+const FRONTEND_PATH = path.join(__dirname, 'frontend');
 console.log('📁 Frontend path:', FRONTEND_PATH);
 console.log('📁 Frontend exists:', fs.existsSync(FRONTEND_PATH));
 console.log('📁 Frontend contents:', fs.existsSync(FRONTEND_PATH) ? fs.readdirSync(FRONTEND_PATH) : 'Directory not found');
 
 app.use(express.static(FRONTEND_PATH));
+
+// Serve public assets (images, JS libraries)
+const PUBLIC_PATH = path.join(__dirname, 'public');
+app.use('/images', express.static(path.join(PUBLIC_PATH, 'images')));
+app.use('/js', express.static(path.join(PUBLIC_PATH, 'js')));
 
 // Explicit HTML routes with error handling
 app.get('/', (req, res) => {
