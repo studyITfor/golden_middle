@@ -222,13 +222,22 @@ app.get('/debug/templates', (req, res) => {
       };
     });
     
+    // Also check what files are actually in the base directory
+    let directoryContents = [];
+    try {
+      directoryContents = fs.readdirSync(baseDir);
+    } catch (error) {
+      directoryContents = [`Error reading directory: ${error.message}`];
+    }
+    
     res.json({
       success: true,
       baseDir: baseDir,
       environment: process.env.NODE_ENV,
       templates: templateStatus,
       workingDir: process.cwd(),
-      __dirname: __dirname
+      __dirname: __dirname,
+      directoryContents: directoryContents
     });
   } catch (error) {
     res.status(500).json({
