@@ -3309,7 +3309,7 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
     const pendingBookings = await db.query(`
       SELECT * FROM bookings 
       WHERE status = 'pending' 
-      AND (user_phone IS NOT NULL OR phone IS NOT NULL)
+      AND user_phone IS NOT NULL
       ORDER BY created_at ASC
     `);
     
@@ -3379,7 +3379,7 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
         }
         
         // Send WhatsApp
-        const phone = booking.user_phone || booking.phone;
+        const phone = booking.user_phone;
         if (phone && /^\+\d{10,15}$/.test(phone)) {
           const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
           const pdfUrl = publicPdfUrl || (ticket.localPath ? `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}` : null);
@@ -3476,7 +3476,7 @@ app.post('/api/send-pending-tickets', async (req, res) => {
       SELECT * FROM bookings 
       WHERE ticket_id IS NOT NULL 
       AND (whatsapp_sent = false OR whatsapp_sent IS NULL)
-      AND (user_phone IS NOT NULL OR phone IS NOT NULL)
+      AND user_phone IS NOT NULL
       AND status = 'paid'
       ORDER BY created_at ASC
     `);
@@ -3498,7 +3498,7 @@ app.post('/api/send-pending-tickets', async (req, res) => {
       try {
         console.log(`📱 Sending ticket for booking ${booking.booking_string_id || booking.id}...`);
         
-        const phone = booking.user_phone || booking.phone;
+        const phone = booking.user_phone;
         if (!phone || !/^\+\d{10,15}$/.test(phone)) {
           console.warn(`⚠️ Invalid phone for booking ${booking.id}: ${phone}`);
           results.push({
