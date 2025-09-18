@@ -1983,99 +1983,79 @@ app.post('/api/confirm-payment', async (req, res) => {
     await db.query('COMMIT');
     console.log('✅ Payment transaction committed successfully');
 
-    // generate ticket (PDF and image) and upload to external storage
+    // generate ticket using enhanced template system
     let ticket = null;
     let publicPdfUrl = null;
-    let publicImageUrl = null;
     try {
       console.log('🎫 Generating ticket for booking:', updatedBooking.id);
-      const { generateTicketForBooking, uploadFileToSupabase } = require('./ticket-utils');
+      const { generateTicketForBooking, uploadFileToSupabase } = require('./enhanced-ticket-utils');
       ticket = await generateTicketForBooking(updatedBooking);
       console.log('✅ Ticket generated successfully:', ticket);
       
-      // Upload both PDF and image to external storage
-      if (ticket && ticket.localPath && ticket.imageLocalPath) {
-        console.log('📤 Uploading ticket files to external storage...');
+      // Upload PDF to external storage
+      if (ticket && ticket.localPath) {
+        console.log('📤 Uploading ticket file to external storage...');
         const pdfFileName = path.basename(ticket.localPath);
-        const imageFileName = path.basename(ticket.imageLocalPath);
         
         try {
           // Upload PDF
           publicPdfUrl = await uploadFileToSupabase(ticket.localPath, `tickets/${pdfFileName}`);
           console.log('✅ PDF uploaded to Supabase:', publicPdfUrl);
           
-          // Upload image
-          publicImageUrl = await uploadFileToSupabase(ticket.imageLocalPath, `tickets/${imageFileName}`);
-          console.log('✅ Image uploaded to Supabase:', publicImageUrl);
+          // Update booking with public URL
+          await db.query('UPDATE bookings SET ticket_path = $1 WHERE id = $2', 
+            [publicPdfUrl, updatedBooking.id]);
           
-          // Update booking with public URLs
-          await db.query('UPDATE bookings SET ticket_path = $1, ticket_image_path = $2 WHERE id = $3', 
-            [publicPdfUrl, publicImageUrl, updatedBooking.id]);
-          
-          // Remove temporary files after successful upload
-          if (ticket.isTemp) {
-            if (fs.existsSync(ticket.localPath)) {
-              fs.unlinkSync(ticket.localPath);
-              console.log('🗑️ Temporary PDF file removed:', ticket.localPath);
-            }
-            if (fs.existsSync(ticket.imageLocalPath)) {
-              fs.unlinkSync(ticket.imageLocalPath);
-              console.log('🗑️ Temporary image file removed:', ticket.imageLocalPath);
-            }
-          }
         } catch (uploadError) {
           console.error('❌ Failed to upload to Supabase:', uploadError);
-          // Fallback to local URLs
+          // Fallback to local URL
           publicPdfUrl = `${process.env.PUBLIC_BASE_URL || 'http://localhost:3000'}${ticket.path}`;
-          publicImageUrl = `${process.env.PUBLIC_BASE_URL || 'http://localhost:3000'}${ticket.imagePath}`;
         }
       }
     } catch (e) {
       console.error('❌ Ticket generation error:', e);
     }
 
-    // send whatsapp via Green API with both image and PDF
+    // send whatsapp via Green API with enhanced Russian text
     let whatsappResult = null;
     try {
       const phone = updatedBooking.user_phone || updatedBooking.phone;
       if (phone && /^\+\d{10,15}$/.test(phone)) {
-        console.log('📱 Sending WhatsApp ticket (image + PDF) to:', phone, 'ticket:', ticket?.ticketId);
+        console.log('📱 Sending WhatsApp ticket to:', phone, 'ticket:', ticket?.ticketId);
         
-        // Use public URLs for Green API - ensure they are valid URLs
+        // Use public URL for Green API - ensure it's a valid URL
         const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
-        const pdfUrl = publicPdfUrl || (ticket && ticket.localPath ? `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}` : null);
-        const imageUrl = publicImageUrl || (ticket && ticket.imageLocalPath ? `${baseUrl}/temp-tickets/${path.basename(ticket.imageLocalPath)}` : null);
+        const pdfUrl = publicPdfUrl || (ticket && ticket.localPath ? `${baseUrl}${ticket.path}` : null);
         
-        console.log('🔗 Ticket URLs for WhatsApp:', { 
+        console.log('🔗 Ticket URL for WhatsApp:', { 
           pdfUrl, 
-          imageUrl, 
           ticket: ticket ? {
             ticketId: ticket.ticketId,
             localPath: ticket.localPath,
-            imageLocalPath: ticket.imageLocalPath,
-            path: ticket.path,
-            imagePath: ticket.imagePath
+            path: ticket.path
           } : null
         });
         
         const ticketForWhatsApp = {
           ticketId: ticket?.ticketId || null,
           pdfUrl: pdfUrl,
-          imageUrl: imageUrl
+          firstName: updatedBooking.first_name,
+          table: updatedBooking.table_number || updatedBooking.table,
+          seat: updatedBooking.seat_number || updatedBooking.seat
         };
         
-        // Call Green API to send both image and PDF
-        const { sendBothTicketFiles } = require('./ticket-utils');
-        whatsappResult = await sendBothTicketFiles(phone, ticketForWhatsApp);
+        // Call enhanced Green API to send Russian text and PDF
+        const { sendWhatsAppTicket } = require('./enhanced-ticket-utils');
+        whatsappResult = await sendWhatsAppTicket(phone, ticketForWhatsApp);
         
         if (whatsappResult.success) {
           // Green API succeeded - update booking to paid
           await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, ticket_id = $2, updated_at = now() WHERE id=$3', 
-            [whatsappResult.imageMessageId || whatsappResult.pdfMessageId, ticket?.ticketId, updatedBooking.id]);
-          console.log('✅ WhatsApp sent successfully (both image and PDF):', {
+            [whatsappResult.textMessageId || whatsappResult.pdfMessageId, ticket?.ticketId, updatedBooking.id]);
+          console.log('✅ WhatsApp sent successfully:', {
             phone: phone,
             provider: whatsappResult.provider,
-            imageMessageId: whatsappResult.imageMessageId,
+            textMessageId: whatsappResult.textMessageId,
             pdfMessageId: whatsappResult.pdfMessageId,
             ticketId: ticket?.ticketId
           });
@@ -2136,10 +2116,9 @@ app.post('/api/confirm-payment', async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'Оплата подтверждена и билет (изображение + PDF) отправлен в WhatsApp',
+      message: 'Оплата подтверждена и билет отправлен в WhatsApp',
       ticketId: ticket && ticket.ticketId || null,
       ticketPath: publicPdfUrl || (ticket && ticket.path) || null,
-      ticketImagePath: publicImageUrl || (ticket && ticket.imagePath) || null,
       whatsappResult: whatsappResult
     });
   } catch (err) {
