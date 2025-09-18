@@ -318,6 +318,12 @@ async function generateTicketForBooking(booking) {
   const fallbackTemplate = path.join(baseDir, 'ticket_template.pdf');
   
   console.log('🔍 Looking for templates in:', baseDir);
+  console.log('🔍 Template files to check:');
+  console.log('  - ticket_design.png:', ticketDesignPng, 'exists:', fs.existsSync(ticketDesignPng));
+  console.log('  - ticket_design.pdf:', ticketDesignPdf, 'exists:', fs.existsSync(ticketDesignPdf));
+  console.log('  - example.pdf:', examplePdf, 'exists:', fs.existsSync(examplePdf));
+  console.log('  - example.png:', examplePng, 'exists:', fs.existsSync(examplePng));
+  console.log('  - fallbackTemplate:', fallbackTemplate, 'exists:', fs.existsSync(fallbackTemplate));
 
   let templatePath = null;
   if (fs.existsSync(ticketDesignPng)) {

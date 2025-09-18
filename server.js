@@ -183,8 +183,16 @@ try {
 }
 
 // Serve tickets with PDF headers
+console.log('📁 Setting up static file serving for tickets at:', TICKETS_PATH);
+console.log('📁 TICKETS_PATH exists:', fs.existsSync(TICKETS_PATH));
+if (fs.existsSync(TICKETS_PATH)) {
+  const files = fs.readdirSync(TICKETS_PATH);
+  console.log('📁 Files in TICKETS_PATH:', files);
+}
+
 app.use('/tickets', express.static(TICKETS_PATH, {
   setHeaders: (res, filePath) => {
+    console.log('📁 Serving file:', filePath);
     if (filePath.endsWith('.pdf')) {
       res.type('application/pdf');
       res.setHeader('Content-Disposition', 'inline');
@@ -233,11 +241,14 @@ app.get('/debug/list-tickets', (req, res) => {
 
 // Debug endpoint to check environment variables
 app.get('/debug/env', (req, res) => {
+  console.log('🔍 Debug /debug/env endpoint called');
   res.json({
     RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || null,
     NODE_ENV: process.env.NODE_ENV || null,
     PORT: process.env.PORT || null,
-    TICKETS_PATH: TICKETS_PATH
+    TICKETS_PATH: TICKETS_PATH,
+    __dirname: __dirname,
+    timestamp: new Date().toISOString()
   });
 });
 
