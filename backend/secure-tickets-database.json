@@ -1,0 +1,24 @@
+{
+  "TEST123456": {
+    "ticketId": "TEST123456",
+    "bookingId": "BKM56CDVUAAM",
+    "holderName": "Test User",
+    "table": 1,
+    "seat": 5,
+    "eventId": "MANUAL-ADD-2025",
+    "eventName": "Manual Event",
+    "eventDate": "2025-09-18",
+    "eventTime": "18:00",
+    "eventVenue": "Manual Venue",
+    "price": 5900,
+    "currency": "Сом",
+    "createdBy": "manual-admin",
+    "createdAt": "2025-09-18T13:00:03.574Z",
+    "status": "active",
+    "used": false,
+    "firstScan": null,
+    "usedAt": null,
+    "usedBy": null,
+    "verificationCount": 0
+  }
+}
