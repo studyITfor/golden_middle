@@ -550,6 +550,17 @@ async function sendWhatsAppTicket(phone, ticket) {
         };
       }
       
+      // Check PDF file size (WhatsApp limit is ~16MB, but we'll use 5MB for safety)
+      if (ticket.localPath) {
+        const stats = fs.statSync(ticket.localPath);
+        const fileSizeMB = (stats.size / (1024 * 1024)).toFixed(2);
+        console.log(`📊 PDF file size: ${fileSizeMB} MB`);
+        
+        if (stats.size > 5 * 1024 * 1024) { // 5MB limit
+          console.warn(`⚠️ PDF file size (${fileSizeMB} MB) exceeds recommended limit for WhatsApp`);
+        }
+      }
+      
       // Construct full public URL for the PDF
       const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://upbeat-compassion-production.up.railway.app';
       const publicPdfUrl = `${baseUrl}${ticket.path}`;
@@ -557,6 +568,23 @@ async function sendWhatsAppTicket(phone, ticket) {
       console.log('🌐 Public PDF URL:', publicPdfUrl);
       console.log('📁 Local PDF path:', ticket.localPath);
       console.log('✅ PDF file exists locally:', ticket.localPath ? fs.existsSync(ticket.localPath) : 'No local path');
+      
+      // Verify public URL is accessible (only in production)
+      if (process.env.NODE_ENV === 'production') {
+        try {
+          console.log('🔍 Verifying public PDF URL accessibility...');
+          const response = await axios.head(publicPdfUrl, { timeout: 10000 });
+          console.log('✅ Public PDF URL is accessible:', response.status);
+        } catch (error) {
+          console.error('❌ Public PDF URL is not accessible:', error.message);
+          return {
+            success: false,
+            error: 'Public PDF URL not accessible',
+            provider: 'Green API',
+            details: `URL not accessible: ${publicPdfUrl} - ${error.message}`
+          };
+        }
+      }
       
       const pdfPayload = {
         chatId: chatId,
@@ -600,10 +628,73 @@ async function sendWhatsAppTicket(phone, ticket) {
   }
 }
 
+// Test function for PDF delivery workflow
+async function testPDFDelivery(phone = '+996555123456') {
+  console.log('🧪 Starting PDF delivery test...');
+  
+  try {
+    // 1. Generate test ticket
+    const testBooking = {
+      first_name: 'Test',
+      last_name: 'User',
+      table: 1,
+      seat: 1,
+      ticket_id: 'TEST_' + Date.now()
+    };
+    
+    console.log('📝 Generating test ticket...');
+    const ticket = await generateTicketForBooking(testBooking);
+    console.log('✅ Ticket generated:', ticket);
+    
+    // 2. Verify local file exists
+    if (!fs.existsSync(ticket.localPath)) {
+      throw new Error('Local PDF file not found');
+    }
+    
+    const stats = fs.statSync(ticket.localPath);
+    console.log(`📊 File size: ${(stats.size / 1024).toFixed(2)} KB`);
+    
+    // 3. Test local URL access
+    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://upbeat-compassion-production.up.railway.app';
+    const publicUrl = `${baseUrl}${ticket.path}`;
+    console.log('🌐 Public URL:', publicUrl);
+    
+    // 4. Test public URL accessibility
+    try {
+      console.log('🔍 Testing public URL accessibility...');
+      const response = await axios.head(publicUrl, { timeout: 10000 });
+      console.log('✅ Public URL accessible:', response.status);
+      console.log('📄 Content-Type:', response.headers['content-type']);
+    } catch (error) {
+      console.warn('⚠️ Public URL not accessible (expected in local dev):', error.message);
+    }
+    
+    // 5. Test WhatsApp sending
+    console.log('📱 Testing WhatsApp delivery...');
+    const result = await sendWhatsAppTicket(phone, ticket);
+    console.log('📱 WhatsApp result:', result);
+    
+    return {
+      success: true,
+      ticket,
+      publicUrl,
+      whatsappResult: result
+    };
+    
+  } catch (error) {
+    console.error('❌ PDF delivery test failed:', error);
+    return {
+      success: false,
+      error: error.message
+    };
+  }
+}
+
 module.exports = {
   generateTicketForBooking,
   generateTicketFromTemplate,
   uploadFileToSupabase,
   sendWhatsAppTicket,
-  createBasicTemplate
+  createBasicTemplate,
+  testPDFDelivery
 };

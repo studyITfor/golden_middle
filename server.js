@@ -153,7 +153,15 @@ app.use('/js', express.static(path.join(PUBLIC_PATH, 'js')));
 
 // Serve tickets folder publicly for WhatsApp PDF delivery
 const TICKETS_PATH = path.join(__dirname, 'tickets');
-app.use('/tickets', express.static(TICKETS_PATH));
+app.use('/tickets', express.static(TICKETS_PATH, { 
+  setHeaders: (res, path) => {
+    if (path.endsWith('.pdf')) {
+      res.type('application/pdf');
+      res.set('Content-Disposition', 'inline');
+      res.set('Cache-Control', 'public, max-age=3600');
+    }
+  }
+}));
 console.log('📁 Tickets path:', TICKETS_PATH);
 console.log('📁 Tickets exists:', fs.existsSync(TICKETS_PATH));
 
