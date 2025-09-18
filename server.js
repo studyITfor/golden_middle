@@ -218,13 +218,36 @@ app.get('/debug/tickets', (req, res) => {
 // Debug endpoint to list files in tickets directory
 app.get('/debug/list-tickets', (req, res) => {
   try {
-    const files = fs.readdirSync(TICKETS_PATH).map(f => {
-      const s = fs.statSync(path.join(TICKETS_PATH, f));
-      return { name: f, size: s.size, mtime: s.mtime };
-    });
-    res.json({ ok: true, path: TICKETS_PATH, files });
-  } catch (err) {
-    res.status(500).json({ ok: false, error: err.message });
+    const files = fs.existsSync(TICKETS_PATH) ? fs.readdirSync(TICKETS_PATH).map(f => {
+      const st = fs.statSync(path.join(TICKETS_PATH, f));
+      return { name: f, size: st.size, mtime: st.mtime };
+    }) : [];
+    res.json({ ticketsPath: TICKETS_PATH, exists: fs.existsSync(TICKETS_PATH), files });
+  } catch (e) { 
+    res.status(500).json({ error: e.message, stack: e.stack }); 
+  }
+});
+
+// Debug endpoint to check environment variables
+app.get('/debug/env', (req, res) => {
+  res.json({
+    RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || null,
+    NODE_ENV: process.env.NODE_ENV || null,
+    PORT: process.env.PORT || null,
+    TICKETS_PATH: TICKETS_PATH
+  });
+});
+
+// Debug endpoint to get the last created ticket
+app.get('/debug/last-ticket', (req, res) => {
+  try {
+    if (!fs.existsSync(TICKETS_PATH)) return res.json({ exists: false, files: [] });
+    const files = fs.readdirSync(TICKETS_PATH).map(f => ({
+      name: f, mtime: fs.statSync(path.join(TICKETS_PATH,f)).mtime
+    })).sort((a,b) => b.mtime - a.mtime);
+    res.json({ last: files[0] || null });
+  } catch (e) { 
+    res.status(500).json({ error: e.message }); 
   }
 });
 
