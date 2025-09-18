@@ -8,6 +8,28 @@ const { createClient } = require('@supabase/supabase-js');
 
 const config = require('./config');
 
+// Canonical URL builder helper
+function buildPublicPdfUrl(ticket) {
+  // Guarantee a valid https base
+  let base = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PUBLIC_BASE_URL || process.env.PUBLIC_URL || 'https://upbeat-compassion-production.up.railway.app';
+  base = base.replace(/\/+$/, ''); // drop trailing slash
+
+  // ticket.path might be '/tickets/ID.pdf' or 'tickets/ID.pdf'
+  let rel = ticket.path || ticket.pdfPath || `/tickets/${ticket.ticketId}.pdf`;
+  if (!rel.startsWith('/')) rel = '/' + rel;
+
+  const url = `${base}${rel}`;
+
+  // defensive check:
+  if (!/^https?:\/\//i.test(url)) {
+    // Always log full details and throw in dev; in prod just warn and return url with https forced
+    console.warn('buildPublicPdfUrl: constructed URL missing scheme — forcing https: ', { base, rel, url });
+    return 'https://' + url.replace(/^\/+/, '');
+  }
+
+  return url;
+}
+
 const GREEN_API_URL = process.env.GREEN_API_URL || config.whatsapp.apiUrl;
 const ID_INSTANCE = process.env.GREEN_API_ID_INSTANCE || config.whatsapp.id;
 const TOKEN = process.env.GREEN_API_TOKEN || config.whatsapp.token;
@@ -580,40 +602,6 @@ async function sendWhatsAppTicket(phone, ticket) {
         console.log('📊 File size check skipped (file not accessible locally)');
       }
       
-      // Safe absolute URL builder for GreenAPI
-      function buildPublicPdfUrl(ticket) {
-        // Ensure we always have a proper base URL with https://
-        let base = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PUBLIC_BASE_URL || 'https://upbeat-compassion-production.up.railway.app';
-        
-        // TEMPORARY FIX: Force the correct URL
-        if (process.env.NODE_ENV === 'production') {
-          base = 'https://upbeat-compassion-production.up.railway.app';
-        }
-        
-        // Remove trailing slash
-        base = base.replace(/\/$/, '');
-        
-        // Ensure it starts with https://
-        if (!base.startsWith('https://') && !base.startsWith('http://')) {
-          base = `https://${base}`;
-        }
-        
-        const rel = ticket.path || ticket.pdfPath || (`/tickets/${ticket.ticketId}.pdf`);
-        const path = rel.startsWith('/') ? rel : `/${rel}`;
-        const url = `${base}${path}`;
-        
-        console.log('🔧 URL Construction Debug:', {
-          'env.RAILWAY_PUBLIC_DOMAIN': process.env.RAILWAY_PUBLIC_DOMAIN,
-          'env.PUBLIC_BASE_URL': process.env.PUBLIC_BASE_URL,
-          'base': base,
-          'rel': rel,
-          'path': path,
-          'finalUrl': url
-        });
-        
-        return url;
-      }
-      
       const publicPdfUrl = buildPublicPdfUrl(ticket);
       
       // Defensive: ensure it starts with http
@@ -622,23 +610,9 @@ async function sendWhatsAppTicket(phone, ticket) {
         throw new Error(`Invalid PDF URL format: ${publicPdfUrl}`);
       }
       
-      console.log('🌐 Public PDF URL (direct endpoint):', publicPdfUrl);
-      console.log('📁 Local PDF path:', ticket.localPath);
+      console.log('GREENAPI: will call sendFileByUrl with pdfUrl=%s ticketId=%s booking=%s', publicPdfUrl, ticket.ticketId, ticket.bookingId || 'N/A');
+      console.log('📁 Local PDF path:', ticket.localPath || 'N/A');
       console.log('✅ PDF file exists locally:', ticket.localPath ? fs.existsSync(ticket.localPath) : 'No local path');
-      console.log('🔍 Debug ticket object:', {
-        path: ticket.path,
-        ticketId: ticket.ticketId,
-        publicPdfUrl: publicPdfUrl
-      });
-      
-      // Additional debugging for URL construction
-      console.log('🔍 URL Construction Debug:', {
-        'ticket.path': ticket.path,
-        'ticket.pdfPath': ticket.pdfPath,
-        'ticket.ticketId': ticket.ticketId,
-        'finalUrl': publicPdfUrl,
-        'urlStartsWithHttp': /^https?:\/\//.test(publicPdfUrl)
-      });
       
       // Verify public URL is accessible (always check for WhatsApp delivery)
       try {

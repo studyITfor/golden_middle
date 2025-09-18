@@ -2038,8 +2038,8 @@ app.post('/api/confirm-payment', async (req, res) => {
         } catch (uploadError) {
           console.error('❌ Failed to upload to Supabase:', uploadError);
           // Fallback to production URL
-          const baseUrl = process.env.PUBLIC_BASE_URL || 'https://upbeat-compassion-production.up.railway.app';
-          publicPdfUrl = `${baseUrl}${ticket.path}`;
+          const { buildPublicPdfUrl } = require('./enhanced-ticket-utils');
+          publicPdfUrl = buildPublicPdfUrl(ticket);
           console.log('📎 Using production URL for PDF:', publicPdfUrl);
         }
       }
