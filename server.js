@@ -151,6 +151,9 @@ const PUBLIC_PATH = path.join(__dirname, 'public');
 app.use('/images', express.static(path.join(PUBLIC_PATH, 'images')));
 app.use('/js', express.static(path.join(PUBLIC_PATH, 'js')));
 
+// Test static file serving with a simple route
+app.use('/test-static', express.static(path.join(__dirname, 'tickets')));
+
 // Serve tickets folder publicly for WhatsApp PDF delivery
 const TICKETS_PATH = path.join(__dirname, 'tickets');
 app.use('/tickets', express.static(TICKETS_PATH, { 
