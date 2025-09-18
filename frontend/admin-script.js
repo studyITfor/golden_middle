@@ -394,9 +394,6 @@ class AdminPanel {
     }
 
     init() {
-        // Check if user is already logged in
-        this.checkSession();
-        
         this.setupEventListeners();
         this.loadBookings();
         this.loadData();
@@ -408,36 +405,6 @@ class AdminPanel {
         this.setupRealtimeUpdates();
         // Initialize seating plan image zoom functionality
         this.initializeSeatingPlanImage();
-    }
-    
-    checkSession() {
-        const isAdmin = localStorage.getItem('isAdmin');
-        const loginTime = localStorage.getItem('adminLoginTime');
-        
-        if (isAdmin === 'true' && loginTime) {
-            // Check if session is not too old (24 hours)
-            const loginDate = new Date(loginTime);
-            const now = new Date();
-            const hoursDiff = (now - loginDate) / (1000 * 60 * 60);
-            
-            if (hoursDiff < 24) {
-                // User is logged in, show dashboard
-                document.getElementById('loginScreen').style.display = 'none';
-                document.getElementById('adminDashboard').style.display = 'block';
-                console.log('✅ Admin session restored');
-                return true;
-            } else {
-                // Session expired, clear it
-                localStorage.removeItem('isAdmin');
-                localStorage.removeItem('adminLoginTime');
-                console.log('⚠️ Admin session expired');
-            }
-        }
-        
-        // User not logged in, show login screen
-        document.getElementById('loginScreen').style.display = 'flex';
-        document.getElementById('adminDashboard').style.display = 'none';
-        return false;
     }
 
     setupEventListeners() {
@@ -620,75 +587,27 @@ class AdminPanel {
         });
     }
 
-    async handleLogin() {
-        console.log('[DEBUG] handleLogin called');
+    handleLogin() {
         const password = document.getElementById('adminPassword').value;
         const errorDiv = document.getElementById('loginError');
-        const submitBtn = document.querySelector('#loginForm button[type="submit"]');
-        
-        // Show loading state
-        const originalText = submitBtn.innerHTML;
-        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Вход...';
-        submitBtn.disabled = true;
 
-        try {
-            const response = await fetch('/api/admin/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ password })
-            });
-
-            const data = await response.json();
-
-            if (data.success) {
-                // Store session in localStorage
-                localStorage.setItem('isAdmin', 'true');
-                localStorage.setItem('adminLoginTime', new Date().toISOString());
-                
-                // Show admin dashboard
-                document.getElementById('loginScreen').style.display = 'none';
-                document.getElementById('adminDashboard').style.display = 'block';
-                
-                // Load admin data
-                this.loadBookings();
-                this.updateStatistics();
-                
-                console.log('✅ Admin login successful');
-            } else {
-                // Show error message
-                errorDiv.style.display = 'flex';
-                errorDiv.innerHTML = `<i class="fas fa-exclamation-triangle"></i> ${data.error || 'Неверный пароль'}`;
-                setTimeout(() => {
-                    errorDiv.style.display = 'none';
-                }, 3000);
-            }
-        } catch (error) {
-            console.error('Login error:', error);
+        if (password === this.adminPassword) {
+            document.getElementById('loginScreen').style.display = 'none';
+            document.getElementById('adminDashboard').style.display = 'block';
+            this.loadBookings();
+            this.updateStatistics();
+        } else {
             errorDiv.style.display = 'flex';
-            errorDiv.innerHTML = '<i class="fas fa-exclamation-triangle"></i> Ошибка сервера. Попробуйте еще раз.';
             setTimeout(() => {
                 errorDiv.style.display = 'none';
             }, 3000);
-        } finally {
-            // Restore button state
-            submitBtn.innerHTML = originalText;
-            submitBtn.disabled = false;
         }
     }
 
     logout() {
-        // Clear session from localStorage
-        localStorage.removeItem('isAdmin');
-        localStorage.removeItem('adminLoginTime');
-        
-        // Show login screen
         document.getElementById('loginScreen').style.display = 'flex';
         document.getElementById('adminDashboard').style.display = 'none';
         document.getElementById('adminPassword').value = '';
-        
-        console.log('✅ Admin logged out');
     }
 
     async loadBookings() {
@@ -2969,7 +2888,6 @@ Status: ${booking.status}
         console.log('Viewing ticket details for:', ticketId);
         // Implementation for detailed ticket view
     }
-}
 
 // Initialize admin panel
 let adminPanel;

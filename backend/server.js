@@ -154,12 +154,6 @@ app.get('/admin.html', (req, res) => {
 // Serve static files from public directory (if exists)
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
-// Serve images from public/images directory at /images/ path
-app.use('/images', express.static(path.join(__dirname, '..', 'public', 'images')));
-
-// Serve JavaScript files from public/js directory at /js/ path
-app.use('/js', express.static(path.join(__dirname, '..', 'public', 'js')));
-
 // Serve tickets directory statically
 app.use('/tickets', express.static(path.join(__dirname, '..', 'tickets')));
 
@@ -2651,43 +2645,6 @@ app.get('/admin/actions', (req, res) => {
     }
 });
 
-// ===== ADMIN AUTHENTICATION API ENDPOINTS =====
-
-// Admin login endpoint
-app.post('/api/admin/login', (req, res) => {
-    try {
-        const { password } = req.body;
-        
-        if (!password) {
-            return res.status(400).json({ 
-                success: false,
-                error: 'Password is required' 
-            });
-        }
-
-        const adminPassword = process.env.ADMIN_PASSWORD || 'admin123';
-        
-        if (password === adminPassword) {
-            res.json({
-                success: true,
-                message: 'Login successful'
-            });
-        } else {
-            res.status(401).json({
-                success: false,
-                error: 'Invalid password'
-            });
-        }
-    } catch (error) {
-        console.error('Error in admin login:', error);
-        res.status(500).json({ 
-            success: false,
-            error: 'Internal server error',
-            details: error.message 
-        });
-    }
-});
-
 // ===== SECURE TICKET SYSTEM API ENDPOINTS =====
 
 // Generate a secure ticket
@@ -2880,28 +2837,6 @@ app.get('/api/seat-statuses', async (req, res) => {
     }
 });
 
-// Get all tickets with usage status (must be before /:ticketId route)
-app.get('/api/secure-tickets/all', (req, res) => {
-    try {
-        const tickets = secureTicketSystem.getAllTickets();
-        const ticketsWithStatus = Object.keys(tickets).map(ticketId => ({
-            ...tickets[ticketId],
-            usageStatus: secureTicketSystem.getTicketUsageStatus(ticketId)
-        }));
-        
-        res.json({
-            success: true,
-            data: ticketsWithStatus
-        });
-    } catch (error) {
-        console.error('Error getting all tickets:', error);
-        res.status(500).json({ 
-            error: 'Failed to get tickets',
-            details: error.message 
-        });
-    }
-});
-
 // Get ticket information
 app.get('/api/secure-tickets/:ticketId', (req, res) => {
     try {
@@ -3076,6 +3011,27 @@ app.get('/api/secure-tickets/usage-status/:ticketId', (req, res) => {
     }
 });
 
+// Get all tickets with usage status
+app.get('/api/secure-tickets/all', (req, res) => {
+    try {
+        const tickets = secureTicketSystem.getAllTickets();
+        const ticketsWithStatus = Object.keys(tickets).map(ticketId => ({
+            ...tickets[ticketId],
+            usageStatus: secureTicketSystem.getTicketUsageStatus(ticketId)
+        }));
+        
+        res.json({
+            success: true,
+            data: ticketsWithStatus
+        });
+    } catch (error) {
+        console.error('Error getting all tickets:', error);
+        res.status(500).json({ 
+            error: 'Failed to get tickets',
+            details: error.message 
+        });
+    }
+});
 
 // Socket.IO events for ticket management
 io.on('connection', (socket) => {
