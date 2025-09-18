@@ -99,20 +99,20 @@ async function generateTicketFromTemplate(booking, templatePath, outputPath) {
     // Template dimensions: 460.8 x 250.08 (based on actual template)
     // Positions match the example image exactly
     
-    // Position for full name (center area, large bold text as in example)
+    // Position for full name (center area, matching template placeholder "FULL NAME")
     const namePosition = {
-      x: width / 2 - 100,  // Center horizontally, accounting for text width
-      y: height / 2 + 20,  // Center vertically, matching example position
-      size: 18,            // Larger size to match example prominence
+      x: width / 2 - 40,  // Center horizontally, matching template
+      y: height / 2 + 10, // Center vertically, matching template
+      size: 16,           // Size matching template
       font: font,
       color: rgb(0, 0, 0)
     };
     
-    // Position for table and seat (right lower corner, exactly as in example)
+    // Position for table and seat (right lower corner, matching template placeholder "TABLE AND SEAT")
     const tableSeatPosition = {
-      x: width - 140,     // Right side of ticket, matching example
-      y: 50,              // Lower area, matching example position
-      size: 14,           // Size matching example
+      x: width - 150,     // Right side of ticket, matching template
+      y: 60,              // Lower area, matching template position
+      size: 12,           // Size matching template
       font: regularFont,
       color: rgb(0, 0, 0)
     };
@@ -169,20 +169,20 @@ async function generateTicketFromTemplate(booking, templatePath, outputPath) {
     const qrImageBytes = Buffer.from(qrDataUrl.split(',')[1], 'base64');
     const qrImage = await pdfDoc.embedPng(qrImageBytes);
     
-    // Draw QR code in left lower corner (exactly as shown in example)
-    const qrSize = 50; // Size matching the example QR code
+    // Draw QR code in left lower corner (matching template QR placeholder)
+    const qrSize = 60; // Size matching the template QR placeholder
     firstPage.drawImage(qrImage, {
-      x: 30,              // Left side of ticket, matching example position
-      y: 30,              // Lower area, matching example position
+      x: 30,              // Left side of ticket, matching template position
+      y: 30,              // Lower area, matching template position
       width: qrSize,
       height: qrSize
     });
 
-    // Add ticket ID text near QR code (left lower corner, matching example)
+    // Add ticket ID text near QR code (left lower corner, matching template)
     firstPage.drawText(ticketId, {
       x: 30,
       y: 20,
-      size: 9,
+      size: 8,
       font: regularFont,
       color: rgb(0, 0, 0)
     });
