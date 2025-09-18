@@ -636,7 +636,6 @@ async function sendWhatsAppTicket(phone, ticket) {
         'ticket.path': ticket.path,
         'ticket.pdfPath': ticket.pdfPath,
         'ticket.ticketId': ticket.ticketId,
-        'baseUrl': baseUrl,
         'finalUrl': publicPdfUrl,
         'urlStartsWithHttp': /^https?:\/\//.test(publicPdfUrl)
       });
