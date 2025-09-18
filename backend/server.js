@@ -43,11 +43,13 @@ const API_TOKEN = process.env.GREEN_API_TOKEN || config.whatsapp.token;
 
 // Green API retry function
 async function sendWhatsAppWithRetry(phone, ticket, maxRetries = 1) {
-  const chatId = phone + '@c.us';
+  // Format phone number for Green API (remove + and ensure it's 12 digits)
+  const cleanPhone = phone.replace(/[^\d]/g, '');
+  const chatId = cleanPhone + '@c.us';
   
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
-      console.log(`📱 Green API attempt ${attempt}/${maxRetries + 1} for ${phone}`);
+      console.log(`📱 Green API attempt ${attempt}/${maxRetries + 1} for ${phone} (chatId: ${chatId})`);
       console.log('Green API payload:', { chatId, ticketId: ticket?.ticketId, timestamp: new Date().toISOString() });
       
       // First send text message
