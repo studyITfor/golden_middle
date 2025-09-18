@@ -135,3 +135,9 @@ test-*
 *test*
 scripts/
 
+# Include template files and fonts for PDF generation
+!ticket_design.png
+!ticket_design.pdf
+!ticket_template.pdf
+!fonts/
+

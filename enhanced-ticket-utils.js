@@ -249,8 +249,16 @@ async function generateTicketFromTemplate(booking, templatePath, outputPath) {
 async function generateTicketForBooking(booking) {
   const ticketId = booking.ticket_id || ('T' + Date.now().toString(36).toUpperCase());
   const pdfFilename = `${ticketId}.pdf`;
-  const ticketsDir = path.join(__dirname, '..', 'tickets');
+  
+  // Use correct path for Railway environment
+  // In Railway: /app/tickets, In local dev: D:\admin-script\tickets
+  const ticketsDir = process.env.NODE_ENV === 'production' 
+    ? '/app/tickets' 
+    : path.join(__dirname, '..', 'tickets');
   const pdfFilepath = path.join(ticketsDir, pdfFilename);
+  
+  console.log('📁 Tickets directory:', ticketsDir);
+  console.log('📄 PDF file path:', pdfFilepath);
 
   // Ensure tickets directory exists
   if (!fs.existsSync(ticketsDir)) {
@@ -258,11 +266,15 @@ async function generateTicketForBooking(booking) {
   }
 
   // Try to find template files (prioritize ticket_design.png)
-  const ticketDesignPng = path.join(__dirname, 'ticket_design.png');
-  const ticketDesignPdf = path.join(__dirname, 'ticket_design.pdf');
-  const examplePdf = path.join(__dirname, 'example.pdf');
-  const examplePng = path.join(__dirname, 'example.png');
-  const fallbackTemplate = path.join(__dirname, 'ticket_template.pdf');
+  // Use correct base directory for Railway vs local development
+  const baseDir = process.env.NODE_ENV === 'production' ? '/app' : __dirname;
+  const ticketDesignPng = path.join(baseDir, 'ticket_design.png');
+  const ticketDesignPdf = path.join(baseDir, 'ticket_design.pdf');
+  const examplePdf = path.join(baseDir, 'example.pdf');
+  const examplePng = path.join(baseDir, 'example.png');
+  const fallbackTemplate = path.join(baseDir, 'ticket_template.pdf');
+  
+  console.log('🔍 Looking for templates in:', baseDir);
 
   let templatePath = null;
   if (fs.existsSync(ticketDesignPng)) {
@@ -795,6 +807,37 @@ async function testExternalURL(url) {
   }
 }
 
+// Function to upload PDF to Railway (copy to Railway's tickets folder)
+async function uploadPDFToRailway(localPath, filename) {
+  try {
+    console.log('📤 Uploading PDF to Railway...');
+    console.log('📁 Local path:', localPath);
+    console.log('📄 Filename:', filename);
+    
+    // In production, the PDF should already be in the Railway environment
+    // This function is mainly for local development testing
+    if (process.env.NODE_ENV === 'production') {
+      console.log('✅ Production environment - PDF should already be in Railway');
+      return { success: true, message: 'PDF already in Railway environment' };
+    }
+    
+    // For local development, we need to ensure the PDF exists in the Railway environment
+    // This would typically be handled by the deployment process
+    console.log('⚠️ Local development - PDF upload to Railway not implemented');
+    console.log('💡 In production, PDFs are generated directly in the Railway environment');
+    
+    return { 
+      success: false, 
+      message: 'PDF upload to Railway not implemented for local development',
+      suggestion: 'Deploy to Railway to test PDF delivery'
+    };
+    
+  } catch (error) {
+    console.error('❌ Error uploading PDF to Railway:', error);
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   generateTicketForBooking,
   generateTicketFromTemplate,
@@ -802,5 +845,6 @@ module.exports = {
   sendWhatsAppTicket,
   createBasicTemplate,
   testPDFDelivery,
-  testExternalURL
+  testExternalURL,
+  uploadPDFToRailway
 };

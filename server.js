@@ -16,6 +16,12 @@ const SecureTicketSystem = require('./secure-ticket-system');
 const db = require('./database');
 const { uploadTicketToStorage } = require('./storage-utils');
 
+// Set production environment for Railway
+if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
+  process.env.NODE_ENV = 'production';
+  console.log('🚀 Railway environment detected - setting NODE_ENV=production');
+}
+
 const app = express();
 const server = createServer(app);
 
