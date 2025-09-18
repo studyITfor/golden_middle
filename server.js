@@ -20,6 +20,12 @@ const { uploadTicketToStorage } = require('./storage-utils');
 if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
   process.env.NODE_ENV = 'production';
   console.log('🚀 Railway environment detected - setting NODE_ENV=production');
+  
+  // Run database migration in Railway
+  if (process.env.DATABASE_URL) {
+    console.log('🔧 Running database migration...');
+    require('./railway_migration.js');
+  }
 }
 
 const app = express();
