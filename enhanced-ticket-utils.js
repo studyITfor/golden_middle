@@ -13,6 +13,11 @@ function buildPublicPdfUrl(ticket) {
   // Guarantee a valid https base
   let base = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PUBLIC_BASE_URL || process.env.PUBLIC_URL || 'https://upbeat-compassion-production.up.railway.app';
   base = base.replace(/\/+$/, ''); // drop trailing slash
+  
+  // Ensure base has https:// prefix
+  if (!base.startsWith('https://') && !base.startsWith('http://')) {
+    base = `https://${base}`;
+  }
 
   // ticket.path might be '/tickets/ID.pdf' or 'tickets/ID.pdf'
   let rel = ticket.path || ticket.pdfPath || `/tickets/${ticket.ticketId}.pdf`;
