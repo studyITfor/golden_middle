@@ -2143,7 +2143,9 @@ app.post('/api/confirm-payment', async (req, res) => {
         
         const ticketForWhatsApp = {
           ticketId: ticket?.ticketId || null,
+          path: ticket?.path || `/tickets/${ticket?.ticketId}.pdf`, // Use path property for WhatsApp function
           pdfUrl: pdfUrl,
+          localPath: ticket?.localPath,
           firstName: updatedBooking.first_name,
           lastName: updatedBooking.last_name,
           first_name: updatedBooking.first_name,
