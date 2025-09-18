@@ -281,17 +281,28 @@ async function generateTicketForBooking(booking) {
   // In Railway: /app/tickets, In local dev: D:\admin-script\tickets
   const ticketsDir = process.env.NODE_ENV === 'production' 
     ? '/app/tickets' 
-    : path.resolve(__dirname, '..', 'tickets');
+    : path.resolve(__dirname, 'tickets');
   const pdfFilepath = path.join(ticketsDir, pdfFilename);
   
   console.log('📁 Tickets directory:', ticketsDir);
   console.log('📄 PDF file path:', pdfFilepath);
   console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
   console.log('🔍 __dirname:', __dirname);
+  console.log('🔍 Final resolved ticketsDir:', path.resolve(ticketsDir));
+  console.log('🔍 Final resolved pdfFilepath:', path.resolve(pdfFilepath));
 
   // Ensure tickets directory exists
-  if (!fs.existsSync(ticketsDir)) {
-    fs.mkdirSync(ticketsDir, { recursive: true });
+  try {
+    if (!fs.existsSync(ticketsDir)) {
+      console.log('📁 Creating tickets directory:', ticketsDir);
+      fs.mkdirSync(ticketsDir, { recursive: true });
+      console.log('✅ Tickets directory created successfully');
+    } else {
+      console.log('✅ Tickets directory already exists:', ticketsDir);
+    }
+  } catch (error) {
+    console.error('❌ Failed to create tickets directory:', error);
+    throw new Error(`Cannot create tickets directory: ${error.message}`);
   }
 
   // Try to find template files (prioritize ticket_design.png)
