@@ -285,6 +285,22 @@ app.get('/debug/test-pdf-generation', async (req, res) => {
   }
 });
 
+// Debug endpoint to check environment variables
+app.get('/debug/env', (req, res) => {
+  res.json({
+    success: true,
+    environment: process.env.NODE_ENV,
+    railwayEnvironment: process.env.RAILWAY_ENVIRONMENT,
+    railwayProjectId: process.env.RAILWAY_PROJECT_ID,
+    railwayPublicDomain: process.env.RAILWAY_PUBLIC_DOMAIN,
+    publicBaseUrl: process.env.PUBLIC_BASE_URL,
+    allEnvVars: Object.keys(process.env).filter(key => key.includes('RAILWAY') || key.includes('PUBLIC')).reduce((obj, key) => {
+      obj[key] = process.env[key];
+      return obj;
+    }, {})
+  });
+});
+
 // Debug endpoint to check database schema and run migration
 app.get('/debug/database-schema', async (req, res) => {
   try {
