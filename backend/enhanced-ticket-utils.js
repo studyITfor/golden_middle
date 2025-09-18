@@ -63,6 +63,36 @@ async function generateTicketFromTemplate(booking, templatePath, outputPath) {
         width: imgWidth,
         height: imgHeight
       });
+      
+      // Hide placeholder text by overlaying white rectangles
+      console.log('🎨 Hiding placeholder text...');
+      
+      // Hide "QR" placeholder (left lower corner) - scaled for actual template size
+      firstPage.drawRectangle({
+        x: 100,
+        y: 100,
+        width: 200,
+        height: 200,
+        color: rgb(1, 1, 1) // White background
+      });
+      
+      // Hide "Имя и Фамилия" placeholder (center area) - scaled for actual template size
+      firstPage.drawRectangle({
+        x: width / 2 - 300,
+        y: height / 2 - 50,
+        width: 600,
+        height: 100,
+        color: rgb(1, 1, 1) // White background
+      });
+      
+      // Hide "Номер стола и место" placeholder (right lower corner) - scaled for actual template size
+      firstPage.drawRectangle({
+        x: width - 600,
+        y: 150,
+        width: 500,
+        height: 80,
+        color: rgb(1, 1, 1) // White background
+      });
     } else {
       // Load existing PDF template
       const templateBytes = fs.readFileSync(templatePath);
@@ -95,24 +125,23 @@ async function generateTicketFromTemplate(booking, templatePath, outputPath) {
     const font = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
     const regularFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
 
-    // Calculate positions based on template dimensions and example image reference
-    // Template dimensions: 460.8 x 250.08 (based on actual template)
-    // Positions match the example image exactly
+    // Calculate positions based on template dimensions and placeholder locations
+    // Positions match exactly where placeholders were hidden (scaled for actual template size)
     
-    // Position for full name (center area, matching template placeholder "FULL NAME")
+    // Position for full name (center area, where "Имя и Фамилия" was hidden)
     const namePosition = {
-      x: width / 2 - 40,  // Center horizontally, matching template
-      y: height / 2 + 10, // Center vertically, matching template
-      size: 16,           // Size matching template
+      x: width / 2 - 300,  // Center horizontally, matching hidden placeholder area
+      y: height / 2 + 20,  // Center vertically, matching hidden placeholder area
+      size: 48,            // Size scaled for template (3x larger)
       font: font,
       color: rgb(0, 0, 0)
     };
     
-    // Position for table and seat (right lower corner, matching template placeholder "TABLE AND SEAT")
+    // Position for table and seat (right lower corner, where "Номер стола и место" was hidden)
     const tableSeatPosition = {
-      x: width - 150,     // Right side of ticket, matching template
-      y: 60,              // Lower area, matching template position
-      size: 12,           // Size matching template
+      x: width - 600,     // Right side of ticket, matching hidden placeholder area
+      y: 180,             // Lower area, matching hidden placeholder area
+      size: 36,           // Size scaled for template (3x larger)
       font: regularFont,
       color: rgb(0, 0, 0)
     };
@@ -169,20 +198,20 @@ async function generateTicketFromTemplate(booking, templatePath, outputPath) {
     const qrImageBytes = Buffer.from(qrDataUrl.split(',')[1], 'base64');
     const qrImage = await pdfDoc.embedPng(qrImageBytes);
     
-    // Draw QR code in left lower corner (matching template QR placeholder)
-    const qrSize = 60; // Size matching the template QR placeholder
+    // Draw QR code in left lower corner (where "QR" placeholder was hidden)
+    const qrSize = 150; // Size scaled for template (3x larger)
     firstPage.drawImage(qrImage, {
-      x: 30,              // Left side of ticket, matching template position
-      y: 30,              // Lower area, matching template position
+      x: 125,             // Left side of ticket, centered in hidden placeholder area
+      y: 125,             // Lower area, centered in hidden placeholder area
       width: qrSize,
       height: qrSize
     });
 
-    // Add ticket ID text near QR code (left lower corner, matching template)
+    // Add ticket ID text near QR code (left lower corner, below QR)
     firstPage.drawText(ticketId, {
-      x: 30,
-      y: 20,
-      size: 8,
+      x: 125,
+      y: 100,
+      size: 24,           // Size scaled for template (3x larger)
       font: regularFont,
       color: rgb(0, 0, 0)
     });
@@ -228,26 +257,26 @@ async function generateTicketForBooking(booking) {
     fs.mkdirSync(ticketsDir, { recursive: true });
   }
 
-  // Try to find template files (prioritize example templates)
+  // Try to find template files (prioritize ticket_design.png)
+  const ticketDesignPng = path.join(__dirname, 'ticket_design.png');
+  const ticketDesignPdf = path.join(__dirname, 'ticket_design.pdf');
   const examplePdf = path.join(__dirname, 'example.pdf');
   const examplePng = path.join(__dirname, 'example.png');
-  const templatePdf = path.join(__dirname, 'ticket_design.pdf');
-  const templatePng = path.join(__dirname, 'ticket_design.png');
   const fallbackTemplate = path.join(__dirname, 'ticket_template.pdf');
 
   let templatePath = null;
-  if (fs.existsSync(examplePdf)) {
+  if (fs.existsSync(ticketDesignPng)) {
+    templatePath = ticketDesignPng;
+    console.log('✅ Using ticket_design.png template:', ticketDesignPng);
+  } else if (fs.existsSync(ticketDesignPdf)) {
+    templatePath = ticketDesignPdf;
+    console.log('✅ Using ticket_design.pdf template:', ticketDesignPdf);
+  } else if (fs.existsSync(examplePdf)) {
     templatePath = examplePdf;
     console.log('✅ Using example PDF template:', examplePdf);
   } else if (fs.existsSync(examplePng)) {
     templatePath = examplePng;
     console.log('✅ Using example PNG template:', examplePng);
-  } else if (fs.existsSync(templatePdf)) {
-    templatePath = templatePdf;
-    console.log('✅ Using PDF template:', templatePdf);
-  } else if (fs.existsSync(templatePng)) {
-    templatePath = templatePng;
-    console.log('✅ Using PNG template:', templatePng);
   } else if (fs.existsSync(fallbackTemplate)) {
     templatePath = fallbackTemplate;
     console.log('✅ Using fallback template:', fallbackTemplate);
