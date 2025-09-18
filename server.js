@@ -191,6 +191,31 @@ app.get('/debug/tickets', (req, res) => {
   }
 });
 
+// Direct PDF serving endpoint as fallback
+app.get('/pdf/:filename', (req, res) => {
+  try {
+    const filename = req.params.filename;
+    const filePath = path.join(__dirname, 'tickets', filename);
+    
+    console.log('📄 Serving PDF:', filePath);
+    console.log('📄 File exists:', fs.existsSync(filePath));
+    
+    if (!fs.existsSync(filePath)) {
+      return res.status(404).json({ error: 'PDF file not found' });
+    }
+    
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Cache-Control', 'public, max-age=3600');
+    
+    res.sendFile(filePath);
+  } catch (error) {
+    console.error('❌ Error serving PDF:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Explicit HTML routes with error handling
 app.get('/', (req, res) => {
     const indexPath = path.join(FRONTEND_PATH, 'index.html');
