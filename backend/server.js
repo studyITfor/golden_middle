@@ -154,6 +154,9 @@ app.get('/admin.html', (req, res) => {
 // Serve static files from public directory (if exists)
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Serve images from public/images directory at /images/ path
+app.use('/images', express.static(path.join(__dirname, '..', 'public', 'images')));
+
 // Serve tickets directory statically
 app.use('/tickets', express.static(path.join(__dirname, '..', 'tickets')));
 
