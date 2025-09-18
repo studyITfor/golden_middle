@@ -80,9 +80,10 @@ dist
 node_modules
 npm-debug.log
 
-# Игнорируем всё в public кроме images
+# Игнорируем всё в public кроме images и js
 public/*
 !public/images/
+!public/js/
 
 
 # Storybook build outputs
