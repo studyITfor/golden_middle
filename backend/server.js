@@ -140,15 +140,33 @@ app.use(express.json());
 
 // Set static folder to repo/frontend
 const FRONTEND_PATH = path.resolve(__dirname, '..', 'frontend');
+console.log('📁 Frontend path:', FRONTEND_PATH);
+console.log('📁 Frontend exists:', fs.existsSync(FRONTEND_PATH));
+console.log('📁 Frontend contents:', fs.existsSync(FRONTEND_PATH) ? fs.readdirSync(FRONTEND_PATH) : 'Directory not found');
+
 app.use(express.static(FRONTEND_PATH));
 
-// Explicit HTML routes
+// Explicit HTML routes with error handling
 app.get('/', (req, res) => {
-    res.sendFile(path.join(FRONTEND_PATH, 'index.html'));
+    const indexPath = path.join(FRONTEND_PATH, 'index.html');
+    console.log('📄 Serving index.html from:', indexPath);
+    console.log('📄 Index.html exists:', fs.existsSync(indexPath));
+    
+    if (!fs.existsSync(indexPath)) {
+        return res.status(404).send('Index.html not found');
+    }
+    res.sendFile(indexPath);
 });
 
 app.get('/admin.html', (req, res) => {
-    res.sendFile(path.join(FRONTEND_PATH, 'admin.html'));
+    const adminPath = path.join(FRONTEND_PATH, 'admin.html');
+    console.log('📄 Serving admin.html from:', adminPath);
+    console.log('📄 Admin.html exists:', fs.existsSync(adminPath));
+    
+    if (!fs.existsSync(adminPath)) {
+        return res.status(404).send('Admin.html not found');
+    }
+    res.sendFile(adminPath);
 });
 
 // Serve static files from public directory (if exists)
