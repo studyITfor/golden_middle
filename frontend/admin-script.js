@@ -547,6 +547,15 @@ class AdminPanel {
             this.cancelBooking();
         });
 
+        // Bulk actions
+        document.getElementById('bulkConfirmBtn').addEventListener('click', () => {
+            this.bulkConfirmPayments();
+        });
+
+        document.getElementById('sendPendingTicketsBtn').addEventListener('click', () => {
+            this.sendPendingTickets();
+        });
+
         // Ticket actions
         document.getElementById('sendTicket').addEventListener('click', () => {
             this.sendTicket();
@@ -908,6 +917,91 @@ class AdminPanel {
                     confirmButton.disabled = false;
                     confirmButton.innerHTML = '<i class="fas fa-check"></i> Confirm Payment';
                 }
+            }
+        }
+    }
+
+    async bulkConfirmPayments() {
+        if (confirm('Подтвердить все ожидающие бронирования?\n\nЭто действие:\n• Обновит статус всех "Ожидает подтверждения" на "Забронировано (оплачено)"\n• Сгенерирует и отправит билеты в WhatsApp\n• Может занять несколько минут\n\nПродолжить?')) {
+            try {
+                // Show loading state
+                const bulkBtn = document.getElementById('bulkConfirmBtn');
+                const originalText = bulkBtn.innerHTML;
+                bulkBtn.disabled = true;
+                bulkBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Обработка...';
+
+                // Call bulk confirmation API
+                const response = await fetch('/api/bulk-confirm-payments', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Refresh data
+                    await this.loadBookings();
+                    this.renderBookingsTable();
+                    this.updateStatistics();
+                    this.generateHallPreview();
+                    
+                    // Show success message
+                    alert(`✅ Массовое подтверждение завершено!\n\n📋 Обработано: ${result.processed}\n✅ Успешно: ${result.successful}\n❌ Ошибок: ${result.failed}\n\n📱 Билеты отправлены в WhatsApp`);
+                } else {
+                    throw new Error(result.message || 'Ошибка при массовом подтверждении');
+                }
+            } catch (error) {
+                console.error('Error in bulk confirmation:', error);
+                alert(`❌ Ошибка при массовом подтверждении: ${error.message}`);
+            } finally {
+                // Reset button state
+                const bulkBtn = document.getElementById('bulkConfirmBtn');
+                bulkBtn.disabled = false;
+                bulkBtn.innerHTML = '<i class="fas fa-check-double"></i> Подтвердить все';
+            }
+        }
+    }
+
+    async sendPendingTickets() {
+        if (confirm('Отправить билеты для всех подтвержденных бронирований?\n\nЭто действие отправит WhatsApp билеты для всех бронирований со статусом "Забронировано (оплачено)", у которых еще не отправлены билеты.\n\nПродолжить?')) {
+            try {
+                // Show loading state
+                const sendBtn = document.getElementById('sendPendingTicketsBtn');
+                const originalText = sendBtn.innerHTML;
+                sendBtn.disabled = true;
+                sendBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Отправка...';
+
+                // Call send pending tickets API
+                const response = await fetch('/api/send-pending-tickets', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    }
+                });
+
+                const result = await response.json();
+
+                if (result.success) {
+                    // Refresh data
+                    await this.loadBookings();
+                    this.renderBookingsTable();
+                    this.updateStatistics();
+                    
+                    // Show success message
+                    alert(`✅ Отправка билетов завершена!\n\n📋 Обработано: ${result.processed}\n✅ Успешно: ${result.successful}\n❌ Ошибок: ${result.failed}\n\n📱 Билеты отправлены в WhatsApp`);
+                } else {
+                    throw new Error(result.message || 'Ошибка при отправке билетов');
+                }
+            } catch (error) {
+                console.error('Error sending pending tickets:', error);
+                alert(`❌ Ошибка при отправке билетов: ${error.message}`);
+            } finally {
+                // Reset button state
+                const sendBtn = document.getElementById('sendPendingTicketsBtn');
+                sendBtn.disabled = false;
+                sendBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Отправить билеты';
             }
         }
     }
