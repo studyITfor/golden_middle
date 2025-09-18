@@ -79,6 +79,7 @@ dist
 .cache/
 public/*
 !public/images/
+!public/js/
 
 # Storybook build outputs
 .out
