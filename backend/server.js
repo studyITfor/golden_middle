@@ -154,6 +154,9 @@ app.get('/admin.html', (req, res) => {
 // Serve static files from public directory (if exists)
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
+// Serve js files specifically
+app.use('/js', express.static(path.join(__dirname, '..', 'public', 'js')));
+
 // Serve tickets directory statically
 app.use('/tickets', express.static(path.join(__dirname, '..', 'tickets')));
 
