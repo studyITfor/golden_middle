@@ -134,7 +134,6 @@ static-site/
 
 # Large binary files that cause Railway snapshot issues
 *.pdf
-*.png
 *.jpg
 *.jpeg
 *.gif
@@ -144,6 +143,10 @@ static-site/
 *.zip
 *.tar.gz
 *.7z
+
+# PNG files (except public images)
+*.png
+!public/images/*.png
 
 # Ticket files (generated at runtime)
 tickets/
