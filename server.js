@@ -167,7 +167,10 @@ app.use('/js', express.static(path.join(PUBLIC_PATH, 'js')));
 app.use('/test-static', express.static(path.join(__dirname, 'tickets')));
 
 // === TICKETS STATIC (canonical) ===
-const TICKETS_PATH = path.resolve(__dirname, 'tickets'); // <== backend/tickets
+// Use correct path for Railway environment
+const TICKETS_PATH = process.env.NODE_ENV === 'production'
+  ? '/app/tickets'
+  : path.resolve(__dirname, 'tickets');
 
 // create tickets dir if missing at runtime (safe)
 try {
