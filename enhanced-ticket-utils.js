@@ -608,24 +608,21 @@ async function sendWhatsAppTicket(phone, ticket) {
         
         // Verify it's actually a PDF
         if (!response.headers['content-type']?.includes('application/pdf')) {
-          throw new Error(`Invalid content type: ${response.headers['content-type']}`);
+          console.warn('⚠️ Content-Type is not application/pdf, but continuing with PDF delivery...');
+          console.warn('📄 Actual Content-Type:', response.headers['content-type']);
         }
         
       } catch (error) {
-        console.error('❌ Public PDF URL is not accessible:', error.message);
+        console.error('❌ Public PDF URL accessibility check failed:', error.message);
         console.error('🔍 URL details:', {
           url: publicPdfUrl,
           status: error.response?.status,
           headers: error.response?.headers
         });
         
-        return {
-          success: false,
-          error: 'Public PDF URL not accessible',
-          provider: 'Green API',
-          details: `URL not accessible: ${publicPdfUrl} - ${error.message}`,
-          statusCode: error.response?.status
-        };
+        // Don't fail the entire process, just log the warning and continue
+        console.warn('⚠️ URL accessibility check failed, but continuing with PDF delivery...');
+        console.warn('🔗 PDF URL will be sent to Green API:', publicPdfUrl);
       }
       
       const pdfPayload = {
