@@ -200,6 +200,38 @@ app.get('/debug/tickets', (req, res) => {
   }
 });
 
+// Debug endpoint to test PDF generation
+app.get('/debug/test-pdf-generation', async (req, res) => {
+  try {
+    console.log('🧪 Testing PDF generation in Railway...');
+    
+    const testBooking = {
+      first_name: 'Debug',
+      last_name: 'Test',
+      table: 1,
+      seat: 1,
+      ticket_id: 'DEBUG_' + Date.now()
+    };
+    
+    const { generateTicketForBooking } = require('./enhanced-ticket-utils');
+    const ticket = await generateTicketForBooking(testBooking);
+    
+    res.json({
+      success: true,
+      ticket: ticket,
+      environment: process.env.NODE_ENV,
+      ticketsDir: process.env.NODE_ENV === 'production' ? '/app/tickets' : path.join(__dirname, 'tickets')
+    });
+  } catch (error) {
+    console.error('❌ PDF generation test failed:', error);
+    res.status(500).json({
+      success: false,
+      error: error.message,
+      stack: error.stack
+    });
+  }
+});
+
 // Direct PDF serving endpoint as fallback
 app.get('/pdf/:filename', (req, res) => {
   try {
