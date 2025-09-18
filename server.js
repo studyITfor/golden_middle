@@ -2328,8 +2328,19 @@ app.post('/api/confirm-payment', async (req, res) => {
           // Green API failed - set status to confirmation_failed
           console.error('❌ WhatsApp send failed:', whatsappResult.error);
           const errorDetails = JSON.stringify(whatsappResult.details || whatsappResult.error);
-          await db.query('UPDATE bookings SET status = $1, whatsapp_sent = false, whatsapp_message_id = $2, confirmation_error = $3, updated_at = now() WHERE id=$4', 
-            ['confirmation_failed', 'FAILED-' + Date.now(), errorDetails, updatedBooking.id]);
+          // Try to update with confirmation_error column, fallback if it doesn't exist
+          try {
+            await db.query('UPDATE bookings SET status = $1, whatsapp_sent = false, whatsapp_message_id = $2, confirmation_error = $3, updated_at = now() WHERE id=$4', 
+              ['confirmation_failed', 'FAILED-' + Date.now(), errorDetails, updatedBooking.id]);
+          } catch (dbError) {
+            if (dbError.message.includes('confirmation_error')) {
+              console.warn('⚠️ confirmation_error column not found, updating without it');
+              await db.query('UPDATE bookings SET status = $1, whatsapp_sent = false, whatsapp_message_id = $2, updated_at = now() WHERE id=$3', 
+                ['confirmation_failed', 'FAILED-' + Date.now(), updatedBooking.id]);
+            } else {
+              throw dbError;
+            }
+          }
           console.log('❌ Booking status set to confirmation_failed due to WhatsApp failure');
           
           // Return error to admin UI
