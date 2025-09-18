@@ -151,6 +151,12 @@ const PUBLIC_PATH = path.join(__dirname, 'public');
 app.use('/images', express.static(path.join(PUBLIC_PATH, 'images')));
 app.use('/js', express.static(path.join(PUBLIC_PATH, 'js')));
 
+// Serve tickets folder publicly for WhatsApp PDF delivery
+const TICKETS_PATH = path.join(__dirname, 'tickets');
+app.use('/tickets', express.static(TICKETS_PATH));
+console.log('📁 Tickets path:', TICKETS_PATH);
+console.log('📁 Tickets exists:', fs.existsSync(TICKETS_PATH));
+
 // Explicit HTML routes with error handling
 app.get('/', (req, res) => {
     const indexPath = path.join(FRONTEND_PATH, 'index.html');

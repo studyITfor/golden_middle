@@ -536,11 +536,18 @@ async function sendWhatsAppTicket(phone, ticket) {
     console.log('✅ Russian text message sent successfully:', textResponse.data);
     
     // Then send the PDF file if available
-    if (ticket.pdfUrl) {
+    if (ticket.path) {
       console.log('📄 Sending PDF ticket...');
+      
+      // Construct full public URL for the PDF
+      const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://upbeat-compassion-production.up.railway.app';
+      const publicPdfUrl = `${baseUrl}${ticket.path}`;
+      
+      console.log('🌐 Public PDF URL:', publicPdfUrl);
+      
       const pdfPayload = {
         chatId: chatId,
-        urlFile: ticket.pdfUrl,
+        urlFile: publicPdfUrl,
         fileName: `ticket_${ticket.ticketId}.pdf`,
         caption: '🎫 Ваш билет (PDF документ)'
       };
