@@ -1,4 +1,4 @@
-const express = require('express');
+﻿const express = require('express');
 const { createServer } = require('http');
 const { Server } = require('socket.io');
 const { PDFDocument, rgb, StandardFonts } = require('pdf-lib');
@@ -19,11 +19,11 @@ const { uploadTicketToStorage } = require('./storage-utils');
 // Set production environment for Railway
 if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
   process.env.NODE_ENV = 'production';
-  console.log('🚀 Railway environment detected - setting NODE_ENV=production');
+  console.log('рџљЂ Railway environment detected - setting NODE_ENV=production');
   
   // Run database migration in Railway
   if (process.env.DATABASE_URL) {
-    console.log('🔧 Running database migration...');
+    console.log('рџ”§ Running database migration...');
     require('./railway_migration.js');
   }
 }
@@ -62,23 +62,23 @@ async function sendWhatsAppWithRetry(phone, ticket, maxRetries = 1) {
   
   for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
     try {
-      console.log(`📱 Green API attempt ${attempt}/${maxRetries + 1} for ${phone} (chatId: ${chatId})`);
+      console.log(`рџ“± Green API attempt ${attempt}/${maxRetries + 1} for ${phone} (chatId: ${chatId})`);
       console.log('Green API payload:', { chatId, ticketId: ticket?.ticketId, timestamp: new Date().toISOString() });
       
       // First send text message
-      const textMessage = `🎫 *TICKET CONFIRMED* 🎫
+      const textMessage = `рџЋ« *TICKET CONFIRMED* рџЋ«
 
 *Ticket ID:* ${ticket?.ticketId || 'N/A'}
 *Event:* University Event
 *Date:* ${new Date().toLocaleDateString('ru-RU')}
 *Time:* ${new Date().toLocaleTimeString('ru-RU')}
 
-*Status:* ✅ CONFIRMED & PAID
+*Status:* вњ… CONFIRMED & PAID
 
 This ticket is valid for entry to the event.
 Please present this ticket at the entrance.
 
-Thank you for your booking! 🎓`;
+Thank you for your booking! рџЋ“`;
 
       const textResponse = await axios.post(`${GREEN_API_BASE}/waInstance${ID_INSTANCE}/sendMessage/${API_TOKEN}`, {
         chatId: chatId,
@@ -89,16 +89,16 @@ Thank you for your booking! 🎓`;
 
       // Then send file if available
       if (ticket && ticket.path) {
-        console.log('📎 Sending PDF ticket file via Green API sendFileByUrl...');
+        console.log('рџ“Ћ Sending PDF ticket file via Green API sendFileByUrl...');
         
         const filePayload = {
           chatId: chatId,
           urlFile: ticket.path,
           fileName: `ticket_${ticket.ticketId}.pdf`,
-          caption: `🎫 Ваш билет подтвержден!\n\nID билета: ${ticket.ticketId}\n\nБилет прикреплен к сообщению. Пожалуйста, сохраните его для входа на мероприятие.`
+          caption: `рџЋ« Р’Р°С€ Р±РёР»РµС‚ РїРѕРґС‚РІРµСЂР¶РґРµРЅ!\n\nID Р±РёР»РµС‚Р°: ${ticket.ticketId}\n\nР‘РёР»РµС‚ РїСЂРёРєСЂРµРїР»РµРЅ Рє СЃРѕРѕР±С‰РµРЅРёСЋ. РџРѕР¶Р°Р»СѓР№СЃС‚Р°, СЃРѕС…СЂР°РЅРёС‚Рµ РµРіРѕ РґР»СЏ РІС…РѕРґР° РЅР° РјРµСЂРѕРїСЂРёСЏС‚РёРµ.`
         };
         
-        console.log('📱 Green API file payload:', filePayload);
+        console.log('рџ“± Green API file payload:', filePayload);
         
         const fileResponse = await axios.post(`${GREEN_API_BASE}/waInstance${ID_INSTANCE}/sendFileByUrl/${API_TOKEN}`, filePayload, { timeout: 15000 });
         
@@ -121,7 +121,7 @@ Thank you for your booking! 🎓`;
       }
       
     } catch (error) {
-      console.error(`❌ Green API attempt ${attempt} failed:`, error.message);
+      console.error(`вќЊ Green API attempt ${attempt} failed:`, error.message);
       console.error('Green API error details:', {
         status: error.response?.status,
         statusText: error.response?.statusText,
@@ -140,7 +140,7 @@ Thank you for your booking! 🎓`;
       
       // Wait before retry with exponential backoff
       const delay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
-      console.log(`📱 Retrying in ${delay}ms...`);
+      console.log(`рџ“± Retrying in ${delay}ms...`);
       await new Promise(resolve => setTimeout(resolve, delay));
     }
   }
@@ -152,9 +152,9 @@ app.use(express.json());
 
 // Set static folder to backend/frontend
 const FRONTEND_PATH = path.join(__dirname, 'frontend');
-console.log('📁 Frontend path:', FRONTEND_PATH);
-console.log('📁 Frontend exists:', fs.existsSync(FRONTEND_PATH));
-console.log('📁 Frontend contents:', fs.existsSync(FRONTEND_PATH) ? fs.readdirSync(FRONTEND_PATH) : 'Directory not found');
+console.log('рџ“Ѓ Frontend path:', FRONTEND_PATH);
+console.log('рџ“Ѓ Frontend exists:', fs.existsSync(FRONTEND_PATH));
+console.log('рџ“Ѓ Frontend contents:', fs.existsSync(FRONTEND_PATH) ? fs.readdirSync(FRONTEND_PATH) : 'Directory not found');
 
 // Debug endpoints - MUST be before static file middleware
 // Debug endpoint to test tickets folder access
@@ -195,7 +195,7 @@ app.get('/debug/list-tickets', (req, res) => {
 
 // Debug endpoint to check environment variables
 app.get('/debug/env', (req, res) => {
-  console.log('🔍 Debug /debug/env endpoint called');
+  console.log('рџ”Ќ Debug /debug/env endpoint called');
   res.json({
     RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || null,
     NODE_ENV: process.env.NODE_ENV || null,
@@ -254,7 +254,7 @@ app.get('/debug/templates', (req, res) => {
 // Debug endpoint to test PDF generation
 app.get('/debug/test-pdf-generation', async (req, res) => {
   try {
-    console.log('🧪 Testing PDF generation in Railway...');
+    console.log('рџ§Є Testing PDF generation in Railway...');
     
     const testBooking = {
       id: 'TEST_' + Date.now(),
@@ -267,10 +267,10 @@ app.get('/debug/test-pdf-generation', async (req, res) => {
       status: 'confirmed'
     };
     
-    console.log('📋 Test booking:', testBooking);
+    console.log('рџ“‹ Test booking:', testBooking);
     
     const ticket = await generateTicketForBooking(testBooking);
-    console.log('🎫 Generated ticket:', ticket);
+    console.log('рџЋ« Generated ticket:', ticket);
     
     res.json({
       success: true,
@@ -279,7 +279,7 @@ app.get('/debug/test-pdf-generation', async (req, res) => {
       message: 'PDF generation test completed'
     });
   } catch (error) {
-    console.error('❌ PDF generation test failed:', error);
+    console.error('вќЊ PDF generation test failed:', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -291,7 +291,7 @@ app.get('/debug/test-pdf-generation', async (req, res) => {
 // Debug endpoint to check database schema and run migration
 app.get('/debug/database-schema', async (req, res) => {
   try {
-    console.log('🔍 Checking database schema...');
+    console.log('рџ”Ќ Checking database schema...');
     
     // This is a placeholder - in a real implementation, you'd check the actual database schema
     res.json({
@@ -300,7 +300,7 @@ app.get('/debug/database-schema', async (req, res) => {
       timestamp: new Date().toISOString()
     });
   } catch (error) {
-    console.error('❌ Database schema check failed:', error);
+    console.error('вќЊ Database schema check failed:', error);
     res.status(500).json({
       success: false,
       error: error.message,
@@ -336,16 +336,16 @@ try {
 }
 
 // Serve tickets with PDF headers
-console.log('📁 Setting up static file serving for tickets at:', TICKETS_PATH);
-console.log('📁 TICKETS_PATH exists:', fs.existsSync(TICKETS_PATH));
+console.log('рџ“Ѓ Setting up static file serving for tickets at:', TICKETS_PATH);
+console.log('рџ“Ѓ TICKETS_PATH exists:', fs.existsSync(TICKETS_PATH));
 if (fs.existsSync(TICKETS_PATH)) {
   const files = fs.readdirSync(TICKETS_PATH);
-  console.log('📁 Files in TICKETS_PATH:', files);
+  console.log('рџ“Ѓ Files in TICKETS_PATH:', files);
 }
 
 app.use('/tickets', express.static(TICKETS_PATH, {
   setHeaders: (res, filePath) => {
-    console.log('📁 Serving file:', filePath);
+    console.log('рџ“Ѓ Serving file:', filePath);
     if (filePath.endsWith('.pdf')) {
       res.type('application/pdf');
       res.setHeader('Content-Disposition', 'inline');
@@ -353,280 +353,8 @@ app.use('/tickets', express.static(TICKETS_PATH, {
     }
   }
 }));
-console.log('📁 Tickets path:', TICKETS_PATH);
-console.log('📁 Tickets exists:', fs.existsSync(TICKETS_PATH));
-
-// Serve tickets directory statically - REMOVED: duplicate route that was overriding the correct one above
-
-// Serve temporary ticket files
-app.use('/temp-tickets', express.static(os.tmpdir()));
-
-// Health check endpoints
-app.get('/debug/tickets', (req, res) => {
-  try {
-    const ticketsDir = path.join(__dirname, 'tickets');
-    const files = fs.readdirSync(ticketsDir);
-    const pdfFiles = files.filter(file => file.endsWith('.pdf'));
-    
-    res.json({
-      success: true,
-      ticketsPath: ticketsDir,
-      ticketsExists: fs.existsSync(ticketsDir),
-      totalFiles: files.length,
-      pdfFiles: pdfFiles,
-      sampleFile: pdfFiles[0] || null
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Debug endpoint to list files in tickets directory
-app.get('/debug/list-tickets', (req, res) => {
-  try {
-    const files = fs.existsSync(TICKETS_PATH) ? fs.readdirSync(TICKETS_PATH).map(f => {
-      const st = fs.statSync(path.join(TICKETS_PATH, f));
-      return { name: f, size: st.size, mtime: st.mtime };
-    }) : [];
-    res.json({ ticketsPath: TICKETS_PATH, exists: fs.existsSync(TICKETS_PATH), files });
-  } catch (e) { 
-    res.status(500).json({ error: e.message, stack: e.stack }); 
-  }
-});
-
-// Debug endpoint to check environment variables
-app.get('/debug/env', (req, res) => {
-  console.log('🔍 Debug /debug/env endpoint called');
-  res.json({
-    RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || null,
-    NODE_ENV: process.env.NODE_ENV || null,
-    PORT: process.env.PORT || null,
-    TICKETS_PATH: TICKETS_PATH,
-    __dirname: __dirname,
-    timestamp: new Date().toISOString()
-  });
-});
-
-// Debug endpoint to get the last created ticket
-app.get('/debug/last-ticket', (req, res) => {
-  try {
-    if (!fs.existsSync(TICKETS_PATH)) return res.json({ exists: false, files: [] });
-    const files = fs.readdirSync(TICKETS_PATH).map(f => ({
-      name: f, mtime: fs.statSync(path.join(TICKETS_PATH,f)).mtime
-    })).sort((a,b) => b.mtime - a.mtime);
-    res.json({ last: files[0] || null });
-  } catch (e) { 
-    res.status(500).json({ error: e.message }); 
-  }
-});
-
-// Debug endpoint to check template files
-app.get('/debug/templates', (req, res) => {
-  try {
-    const baseDir = process.env.NODE_ENV === 'production' ? '/app' : __dirname;
-    const templateFiles = [
-      'ticket_design.png',
-      'ticket_design.pdf', 
-      'example.pdf',
-      'example.png',
-      'ticket_template.pdf'
-    ];
-    
-    const templateStatus = {};
-    templateFiles.forEach(file => {
-      const filePath = path.join(baseDir, file);
-      templateStatus[file] = {
-        exists: fs.existsSync(filePath),
-        path: filePath,
-        size: fs.existsSync(filePath) ? fs.statSync(filePath).size : 0
-      };
-    });
-    
-    // Also check what files are actually in the base directory
-    let directoryContents = [];
-    try {
-      directoryContents = fs.readdirSync(baseDir);
-    } catch (error) {
-      directoryContents = [`Error reading directory: ${error.message}`];
-    }
-    
-    res.json({
-      success: true,
-      baseDir: baseDir,
-      environment: process.env.NODE_ENV,
-      templates: templateStatus,
-      workingDir: process.cwd(),
-      __dirname: __dirname,
-      directoryContents: directoryContents
-    });
-  } catch (error) {
-    res.status(500).json({
-      success: false,
-      error: error.message
-    });
-  }
-});
-
-// Debug endpoint to test PDF generation
-app.get('/debug/test-pdf-generation', async (req, res) => {
-  try {
-    console.log('🧪 Testing PDF generation in Railway...');
-    
-    const testBooking = {
-      first_name: 'Debug',
-      last_name: 'Test',
-      table: 1,
-      seat: 1,
-      ticket_id: 'DEBUG_' + Date.now()
-    };
-    
-    const { generateTicketForBooking } = require('./enhanced-ticket-utils');
-    const ticket = await generateTicketForBooking(testBooking);
-    
-    res.json({
-      success: true,
-      ticket: ticket,
-      environment: process.env.NODE_ENV,
-      ticketsDir: process.env.NODE_ENV === 'production' ? '/app/tickets' : path.join(__dirname, 'tickets')
-    });
-  } catch (error) {
-    console.error('❌ PDF generation test failed:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      stack: error.stack
-    });
-  }
-});
-
-// Debug endpoint to check environment variables (duplicate removed)
-
-// Debug endpoint to check database schema and run migration
-app.get('/debug/database-schema', async (req, res) => {
-  try {
-    console.log('🔍 Checking database schema...');
-    
-    // Check if DATABASE_URL is set
-    if (!process.env.DATABASE_URL) {
-      return res.json({
-        success: false,
-        error: 'DATABASE_URL not set',
-        environment: process.env.NODE_ENV
-      });
-    }
-    
-    // Connect to database
-    const { Pool } = require('pg');
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false
-    });
-    
-    // Get current table structure
-    const result = await pool.query(`
-      SELECT column_name, data_type, is_nullable, column_default
-      FROM information_schema.columns 
-      WHERE table_name = 'bookings' 
-      ORDER BY ordinal_position;
-    `);
-    
-    const columns = result.rows.map(row => ({
-      name: row.column_name,
-      type: row.data_type,
-      nullable: row.is_nullable === 'YES',
-      default: row.column_default
-    }));
-    
-    // Check if confirmation_error column exists
-    const hasConfirmationError = columns.some(col => col.name === 'confirmation_error');
-    
-    // If missing, try to add it
-    if (!hasConfirmationError) {
-      console.log('🔧 Adding missing confirmation_error column...');
-      try {
-        await pool.query('ALTER TABLE bookings ADD COLUMN confirmation_error TEXT;');
-        console.log('✅ Added confirmation_error column');
-      } catch (error) {
-        console.error('❌ Error adding column:', error.message);
-      }
-    }
-    
-    await pool.end();
-    
-    res.json({
-      success: true,
-      hasConfirmationError: hasConfirmationError,
-      columns: columns,
-      environment: process.env.NODE_ENV,
-      databaseUrl: process.env.DATABASE_URL ? 'Set' : 'Not set'
-    });
-    
-  } catch (error) {
-    console.error('❌ Database schema check failed:', error);
-    res.status(500).json({
-      success: false,
-      error: error.message,
-      stack: error.stack
-    });
-  }
-});
-
-// Direct PDF serving endpoint as fallback
-app.get('/pdf/:filename', (req, res) => {
-  try {
-    const filename = req.params.filename;
-    const filePath = path.join(__dirname, 'tickets', filename);
-    
-    console.log('📄 Serving PDF:', filePath);
-    console.log('📄 File exists:', fs.existsSync(filePath));
-    
-    if (!fs.existsSync(filePath)) {
-      return res.status(404).json({ error: 'PDF file not found' });
-    }
-    
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Cache-Control', 'public, max-age=3600');
-    
-    res.sendFile(filePath);
-  } catch (error) {
-    console.error('❌ Error serving PDF:', error);
-    res.status(500).json({ error: error.message });
-  }
-});
-
-// Explicit HTML routes with error handling
-app.get('/', (req, res) => {
-    const indexPath = path.join(FRONTEND_PATH, 'index.html');
-    console.log('📄 Serving index.html from:', indexPath);
-    console.log('📄 Index.html exists:', fs.existsSync(indexPath));
-    
-    if (!fs.existsSync(indexPath)) {
-        return res.status(404).send('Index.html not found');
-    }
-    res.sendFile(indexPath);
-});
-
-app.get('/admin.html', (req, res) => {
-    const adminPath = path.join(FRONTEND_PATH, 'admin.html');
-    console.log('📄 Serving admin.html from:', adminPath);
-    console.log('📄 Admin.html exists:', fs.existsSync(adminPath));
-    
-    if (!fs.existsSync(adminPath)) {
-        return res.status(404).send('Admin.html not found');
-    }
-    res.sendFile(adminPath);
-});
-
-// Serve static files from public directory (if exists)
-app.use(express.static(path.join(__dirname, '..', 'public')));
-
-// Serve js files specifically
-app.use('/js', express.static(path.join(__dirname, '..', 'public', 'js')));
+console.log('рџ“Ѓ Tickets path:', TICKETS_PATH);
+console.log('рџ“Ѓ Tickets exists:', fs.existsSync(TICKETS_PATH));
 
 // Serve tickets directory statically - REMOVED: duplicate route that was overriding the correct one above
 
@@ -655,7 +383,7 @@ app.get('/api/health/readiness', async (req, res) => {
 // Green API health check
 app.get('/api/health/greenapi', async (req, res) => {
     try {
-        console.log('🔍 Checking Green API health...');
+        console.log('рџ”Ќ Checking Green API health...');
         
         if (!GREEN_API_BASE || !ID_INSTANCE || !API_TOKEN) {
             return res.status(503).json({ 
@@ -716,18 +444,18 @@ const secureTicketSystem = new SecureTicketSystem(
 // Initialize database
 async function initializeApp() {
     try {
-        console.log('🔍 Starting database initialization...');
+        console.log('рџ”Ќ Starting database initialization...');
         
         // Run migration to create tables
         const { pool } = require('./database');
         
         // Skip database initialization if pool is null (local testing without DATABASE_URL)
         if (!pool) {
-            console.log('⚠️ Skipping database initialization - no DATABASE_URL provided');
+            console.log('вљ пёЏ Skipping database initialization - no DATABASE_URL provided');
             return;
         }
         
-        console.log('✅ Database pool available, creating tables...');
+        console.log('вњ… Database pool available, creating tables...');
         
         await pool.query(`
             CREATE TABLE IF NOT EXISTS users (
@@ -781,16 +509,16 @@ async function initializeApp() {
             );
         `);
 
-        console.log('✅ Database tables created successfully');
+        console.log('вњ… Database tables created successfully');
         
         // Test database connection
         const testResult = await pool.query('SELECT NOW()');
-        console.log('✅ Database connection test successful:', testResult.rows[0]);
+        console.log('вњ… Database connection test successful:', testResult.rows[0]);
         
     } catch (error) {
-        console.error('❌ Database initialization failed:', error);
-        console.error('❌ Error details:', error.message);
-        console.error('❌ Error stack:', error.stack);
+        console.error('вќЊ Database initialization failed:', error);
+        console.error('вќЊ Error details:', error.message);
+        console.error('вќЊ Error stack:', error.stack);
         process.exit(1);
     }
 }
@@ -859,12 +587,12 @@ async function emitSeatUpdate(force = false) {
         // Emit seat update to ALL connected clients (both admins and students)
         // Reduced logging for Railway production
         if (process.env.NODE_ENV !== 'production') {
-            console.log('📡 Emitting seatUpdate event to all clients...');
+            console.log('рџ“Ў Emitting seatUpdate event to all clients...');
         }
         io.emit('seatUpdate', updateData);
         
         if (process.env.NODE_ENV !== 'production') {
-            console.log('📡 Emitting update-seat-status event to all clients...');
+            console.log('рџ“Ў Emitting update-seat-status event to all clients...');
         }
         io.emit('update-seat-status', updateData);
         
@@ -874,7 +602,7 @@ async function emitSeatUpdate(force = false) {
         
         if (adminCount > 0) {
             if (process.env.NODE_ENV !== 'production') {
-                console.log(`📡 Emitting admin:seat-update event to ${adminCount} admin clients...`);
+                console.log(`рџ“Ў Emitting admin:seat-update event to ${adminCount} admin clients...`);
             }
             io.to('admins').emit('admin:seat-update', {
                 ...updateData,
@@ -883,7 +611,7 @@ async function emitSeatUpdate(force = false) {
         }
         
         // Reduced logging for Railway production
-        console.log(`📡 Seat update emitted to ${io.engine.clientsCount} clients`);
+        console.log(`рџ“Ў Seat update emitted to ${io.engine.clientsCount} clients`);
     } catch (error) {
         console.error('Error emitting seat update:', error);
     }
@@ -892,11 +620,11 @@ async function emitSeatUpdate(force = false) {
 // Database test endpoint
 app.get('/api/test-db', async (req, res) => {
     try {
-        console.log('🔍 Testing database connection...');
+        console.log('рџ”Ќ Testing database connection...');
         
         // Test basic connection
         const result = await db.query('SELECT NOW()');
-        console.log('✅ Database connection successful:', result.rows[0]);
+        console.log('вњ… Database connection successful:', result.rows[0]);
         
         // Check if bookings table exists
         const tableCheck = await db.query(`
@@ -906,7 +634,7 @@ app.get('/api/test-db', async (req, res) => {
                 AND table_name = 'bookings'
             );
         `);
-        console.log('📋 Bookings table exists:', tableCheck.rows[0].exists);
+        console.log('рџ“‹ Bookings table exists:', tableCheck.rows[0].exists);
         
         // Check table schema
         const schemaCheck = await db.query(`
@@ -925,7 +653,7 @@ app.get('/api/test-db', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Database test error:', error);
+        console.error('вќЊ Database test error:', error);
         res.status(500).json({
             status: 'error',
             error: error.message,
@@ -946,12 +674,12 @@ app.get('/api/bookings', async (req, res) => {
             ORDER BY b.created_at DESC
         `);
         
-        console.log(`✅ Found ${result.rows.length} bookings for admin`);
+        console.log(`вњ… Found ${result.rows.length} bookings for admin`);
         
         res.json(result.rows);
         
     } catch (error) {
-        console.error('❌ Error fetching bookings:', error);
+        console.error('вќЊ Error fetching bookings:', error);
         res.status(500).json({
             status: 'error',
             error: error.message,
@@ -964,7 +692,7 @@ app.get('/api/bookings', async (req, res) => {
 app.delete('/api/delete-booking/:bookingId', async (req, res) => {
     try {
         const { bookingId } = req.params;
-        console.log(`🗑️ Admin requesting to delete booking: ${bookingId}`);
+        console.log(`рџ—‘пёЏ Admin requesting to delete booking: ${bookingId}`);
         
         // First, get the booking details to free up the seat
         const bookingResult = await db.query(
@@ -1007,7 +735,7 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
             timestamp: Date.now()
         });
         
-        console.log(`✅ Booking ${bookingId} deleted successfully`);
+        console.log(`вњ… Booking ${bookingId} deleted successfully`);
         
         res.json({
             success: true,
@@ -1016,7 +744,7 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Error deleting booking:', error);
+        console.error('вќЊ Error deleting booking:', error);
         res.status(500).json({
             success: false,
             error: error.message,
@@ -1028,7 +756,7 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
 // Database migration endpoint
 app.post('/api/migrate-db', async (req, res) => {
     try {
-        console.log('🔧 Starting database migration...');
+        console.log('рџ”§ Starting database migration...');
         
         // Check if we have the correct schema
         const schemaCheck = await db.query(`
@@ -1041,7 +769,7 @@ app.post('/api/migrate-db', async (req, res) => {
         const hasBookingStringId = schemaCheck.rows.some(row => row.column_name === 'booking_string_id');
         
         if (hasBookingStringId) {
-            console.log('✅ Database schema is already correct');
+            console.log('вњ… Database schema is already correct');
             return res.json({
                 status: 'ok',
                 message: 'Database schema is already correct',
@@ -1049,11 +777,11 @@ app.post('/api/migrate-db', async (req, res) => {
             });
         }
         
-        console.log('🔧 Schema needs migration, recreating tables...');
+        console.log('рџ”§ Schema needs migration, recreating tables...');
         
         // Drop and recreate the bookings table with correct schema
         await db.query('DROP TABLE IF EXISTS bookings CASCADE');
-        console.log('✅ Dropped old bookings table');
+        console.log('вњ… Dropped old bookings table');
         
         // Create the correct bookings table
         await db.query(`
@@ -1075,7 +803,7 @@ app.post('/api/migrate-db', async (req, res) => {
                 updated_at TIMESTAMP DEFAULT now()
             );
         `);
-        console.log('✅ Created new bookings table with correct schema');
+        console.log('вњ… Created new bookings table with correct schema');
         
         // Test the new schema
         const testBooking = {
@@ -1108,11 +836,11 @@ app.post('/api/migrate-db', async (req, res) => {
             testBooking.status
         ]);
         
-        console.log('✅ Test booking created successfully:', insertResult.rows[0]);
+        console.log('вњ… Test booking created successfully:', insertResult.rows[0]);
         
         // Clean up test data
         await db.query('DELETE FROM bookings WHERE booking_string_id = $1', [testBooking.booking_string_id]);
-        console.log('🧹 Test data cleaned up');
+        console.log('рџ§№ Test data cleaned up');
         
         res.json({
             status: 'ok',
@@ -1121,7 +849,7 @@ app.post('/api/migrate-db', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Database migration error:', error);
+        console.error('вќЊ Database migration error:', error);
         res.status(500).json({
             status: 'error',
             error: error.message,
@@ -1132,9 +860,9 @@ app.post('/api/migrate-db', async (req, res) => {
 
 // Socket.IO connection handling with role-based access control
 io.on('connection', (socket) => {
-    console.log('🔌 Client connected:', socket.id);
-    console.log('📊 Total connected clients:', io.engine.clientsCount);
-    console.log('🌐 Client transport:', socket.conn.transport.name);
+    console.log('рџ”Њ Client connected:', socket.id);
+    console.log('рџ“Љ Total connected clients:', io.engine.clientsCount);
+    console.log('рџЊђ Client transport:', socket.conn.transport.name);
     
     // Initialize socket data with default role
     socket.data.role = 'student'; // Default role
@@ -1151,7 +879,7 @@ io.on('connection', (socket) => {
     
     // Send initial seat data to newly connected client
     setTimeout(() => {
-        console.log('📡 Sending initial seat data to new client:', socket.id);
+        console.log('рџ“Ў Sending initial seat data to new client:', socket.id);
         emitSeatUpdate();
     }, 100);
     
@@ -1167,8 +895,8 @@ io.on('connection', (socket) => {
     });
     
     socket.on('disconnect', (reason) => {
-        console.log('❌ Client disconnected:', socket.id, 'Reason:', reason);
-        console.log('📊 Total connected clients:', io.engine.clientsCount);
+        console.log('вќЊ Client disconnected:', socket.id, 'Reason:', reason);
+        console.log('рџ“Љ Total connected clients:', io.engine.clientsCount);
     });
     
     // Handle admin room joining
@@ -1187,8 +915,8 @@ io.on('connection', (socket) => {
             
             // Join admin to the unified admins room
             socket.join('admins');
-            console.log('✅ Admin authenticated and joined admins room:', socket.id);
-            console.log('📊 Admins in room:', io.sockets.adapter.rooms.get('admins')?.size || 0);
+            console.log('вњ… Admin authenticated and joined admins room:', socket.id);
+            console.log('рџ“Љ Admins in room:', io.sockets.adapter.rooms.get('admins')?.size || 0);
             
             socket.emit('authSuccess', { 
                 role: 'admin', 
@@ -1198,10 +926,10 @@ io.on('connection', (socket) => {
         } else if (role === 'student') {
             socket.data.role = 'student';
             socket.data.authenticated = true;
-            console.log('✅ Student authenticated:', socket.id);
+            console.log('вњ… Student authenticated:', socket.id);
             socket.emit('authSuccess', { role: 'student', message: 'Student authentication successful' });
         } else {
-            console.log('❌ Authentication failed:', socket.id, 'Role:', role);
+            console.log('вќЊ Authentication failed:', socket.id, 'Role:', role);
             socket.emit('authError', { message: 'Invalid credentials' });
         }
     });
@@ -1210,14 +938,14 @@ io.on('connection', (socket) => {
     socket.on('identify', (payload) => {
         if (payload && payload.role === 'admin' && socket.data.authenticated) {
             socket.join('admins');
-            console.log(`🔗 Socket ${socket.id} joined admins room via identify`);
-            console.log('📊 Admins in room:', io.sockets.adapter.rooms.get('admins')?.size || 0);
+            console.log(`рџ”— Socket ${socket.id} joined admins room via identify`);
+            console.log('рџ“Љ Admins in room:', io.sockets.adapter.rooms.get('admins')?.size || 0);
         }
     });
     
     // Handle test events from clients
     socket.on('test', (data) => {
-        console.log('🧪 Test event received from client:', socket.id, 'Role:', socket.data.role);
+        console.log('рџ§Є Test event received from client:', socket.id, 'Role:', socket.data.role);
         // Echo back the test event
         socket.emit('test', {
             message: 'Test response from server',
@@ -1230,13 +958,13 @@ io.on('connection', (socket) => {
     
     // Handle client requesting seat data (allowed for all roles)
     socket.on('requestSeatData', () => {
-        console.log('📡 Client requesting seat data:', socket.id, 'Role:', socket.data.role);
+        console.log('рџ“Ў Client requesting seat data:', socket.id, 'Role:', socket.data.role);
         emitSeatUpdate();
     });
     
     // Handle seat selection events (allowed for all roles)
     socket.on('seatSelection', (data) => {
-        console.log('📡 Seat selection event:', data.seatId, 'Status:', data.status, 'From client:', socket.id);
+        console.log('рџ“Ў Seat selection event:', data.seatId, 'Status:', data.status, 'From client:', socket.id);
         
         // Emit to all clients except the sender
         socket.broadcast.emit('seatSelection', {
@@ -1246,18 +974,18 @@ io.on('connection', (socket) => {
             fromClient: socket.id
         });
         
-        console.log(`📡 Seat selection broadcasted to ${io.engine.clientsCount - 1} other clients`);
+        console.log(`рџ“Ў Seat selection broadcasted to ${io.engine.clientsCount - 1} other clients`);
     });
     
     // Handle seat modification events (admin only)
     socket.on('modifySeat', (data) => {
         if (socket.data.role !== 'admin' || !socket.data.authenticated) {
-            console.log('🚫 Unauthorized seat modification attempt:', socket.id, 'Role:', socket.data.role);
+            console.log('рџљ« Unauthorized seat modification attempt:', socket.id, 'Role:', socket.data.role);
             socket.emit('error', { message: 'Unauthorized: Only admins can modify seats' });
             return;
         }
         
-        console.log('✅ Admin seat modification:', socket.id, data);
+        console.log('вњ… Admin seat modification:', socket.id, data);
         // Process seat modification here
         socket.emit('seatModified', { success: true, data });
     });
@@ -1265,12 +993,12 @@ io.on('connection', (socket) => {
     // Handle booking events (admin only)
     socket.on('createBooking', (data) => {
         if (socket.data.role !== 'admin' || !socket.data.authenticated) {
-            console.log('🚫 Unauthorized booking attempt:', socket.id, 'Role:', socket.data.role);
+            console.log('рџљ« Unauthorized booking attempt:', socket.id, 'Role:', socket.data.role);
             socket.emit('error', { message: 'Unauthorized: Only admins can create bookings' });
             return;
         }
         
-        console.log('✅ Admin booking creation:', socket.id, data);
+        console.log('вњ… Admin booking creation:', socket.id, data);
         // Process booking creation here
         socket.emit('bookingCreated', { success: true, data });
     });
@@ -1278,19 +1006,19 @@ io.on('connection', (socket) => {
     // Handle bulk seat release (admin only)
     socket.on('admin:releaseAllSeats', (data) => {
         if (socket.data.role !== 'admin' || !socket.data.authenticated) {
-            console.log('🚫 Unauthorized bulk seat release attempt:', socket.id, 'Role:', socket.data.role);
+            console.log('рџљ« Unauthorized bulk seat release attempt:', socket.id, 'Role:', socket.data.role);
             socket.emit('error', { message: 'Unauthorized: Only admins can release all seats' });
             return;
         }
         
-        console.log('🔄 Admin releasing all seats:', socket.id);
+        console.log('рџ”„ Admin releasing all seats:', socket.id);
         releaseAllSeats();
     });
     
     // Handle seat pre-booking (admin only)
     socket.on('admin:prebookSeats', (data) => {
         if (socket.data.role !== 'admin' || !socket.data.authenticated) {
-            console.log('🚫 Unauthorized seat pre-booking attempt:', socket.id, 'Role:', socket.data.role);
+            console.log('рџљ« Unauthorized seat pre-booking attempt:', socket.id, 'Role:', socket.data.role);
             socket.emit('error', { message: 'Unauthorized: Only admins can pre-book seats' });
             return;
         }
@@ -1298,12 +1026,12 @@ io.on('connection', (socket) => {
         const { seatIds, prebookType = 'manual' } = data;
         
         if (!seatIds || !Array.isArray(seatIds) || seatIds.length === 0) {
-            console.log('❌ Invalid pre-booking data:', socket.id, data);
+            console.log('вќЊ Invalid pre-booking data:', socket.id, data);
             socket.emit('error', { message: 'Invalid seat IDs provided for pre-booking' });
             return;
         }
         
-        console.log('🔄 Admin pre-booking seats:', socket.id, 'Seats:', seatIds, 'Type:', prebookType);
+        console.log('рџ”„ Admin pre-booking seats:', socket.id, 'Seats:', seatIds, 'Type:', prebookType);
         prebookSeats(seatIds, prebookType);
     });
     
@@ -1314,7 +1042,7 @@ io.on('connection', (socket) => {
     
     // Handle booking creation events (broadcast to all admins)
     socket.on('booking-created', (data) => {
-        console.log('📡 Booking created event received:', data);
+        console.log('рџ“Ў Booking created event received:', data);
         
         // Broadcast to all admins in the admins room
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
@@ -1329,26 +1057,26 @@ io.on('connection', (socket) => {
         // Also emit seat update to refresh all clients
         emitSeatUpdate();
         
-        console.log(`📡 Booking created broadcasted to ${adminCount} admin clients in admins room`);
+        console.log(`рџ“Ў Booking created broadcasted to ${adminCount} admin clients in admins room`);
     });
 });
 
 // Function to release all seats and emit bulk update
 function releaseAllSeats() {
     try {
-        console.log('🔄 Releasing all seats...');
+        console.log('рџ”„ Releasing all seats...');
         
         // Clear all bookings
         const bookingsPath = path.join(__dirname, 'bookings.json');
         const emptyBookings = {};
         
         fs.writeFileSync(bookingsPath, JSON.stringify(emptyBookings, null, 2));
-        console.log('✅ All bookings cleared from database');
+        console.log('вњ… All bookings cleared from database');
         
         // Emit bulk seat update to all clients
         emitSeatBulkUpdate();
         
-        console.log('📡 Bulk seat update emitted to all connected clients');
+        console.log('рџ“Ў Bulk seat update emitted to all connected clients');
     } catch (error) {
         console.error('Error releasing all seats:', error);
     }
@@ -1414,7 +1142,7 @@ function emitSeatBulkUpdate() {
         // Emit bulk update to all connected clients
         io.emit('seatBulkUpdate', bulkUpdateData);
         
-        console.log(`📡 Bulk seat update emitted to ${io.engine.clientsCount} clients`);
+        console.log(`рџ“Ў Bulk seat update emitted to ${io.engine.clientsCount} clients`);
     } catch (error) {
         console.error('Error emitting bulk seat update:', error);
     }
@@ -1423,7 +1151,7 @@ function emitSeatBulkUpdate() {
 // Function to pre-book specific seats
 function prebookSeats(seatIds, prebookType = 'manual') {
     try {
-        console.log('🔄 Pre-booking seats:', seatIds, 'Type:', prebookType);
+        console.log('рџ”„ Pre-booking seats:', seatIds, 'Type:', prebookType);
         
         // Load current bookings
         const bookingsPath = path.join(__dirname, 'bookings.json');
@@ -1446,7 +1174,7 @@ function prebookSeats(seatIds, prebookType = 'manual') {
             
             if (existingBooking) {
                 alreadyBookedSeats.push(seatId);
-                console.log(`⚠️ Seat ${seatId} is already booked`);
+                console.log(`вљ пёЏ Seat ${seatId} is already booked`);
                 return;
             }
             
@@ -1470,12 +1198,12 @@ function prebookSeats(seatIds, prebookType = 'manual') {
             };
             
             prebookedSeats.push(seatId);
-            console.log(`✅ Pre-booked seat ${seatId}`);
+            console.log(`вњ… Pre-booked seat ${seatId}`);
         });
         
         // Save updated bookings
         fs.writeFileSync(bookingsPath, JSON.stringify(bookings, null, 2));
-        console.log(`💾 Updated bookings database with ${prebookedSeats.length} pre-booked seats`);
+        console.log(`рџ’ѕ Updated bookings database with ${prebookedSeats.length} pre-booked seats`);
         
         // Emit bulk update to all clients
         emitSeatBulkUpdate();
@@ -1506,8 +1234,8 @@ function prebookSeats(seatIds, prebookType = 'manual') {
         
         io.emit('seatBulkUpdate', prebookBulkUpdate);
         
-        console.log(`📡 Pre-booking result emitted to all clients`);
-        console.log(`📊 Pre-booked: ${prebookedSeats.length}, Already booked: ${alreadyBookedSeats.length}`);
+        console.log(`рџ“Ў Pre-booking result emitted to all clients`);
+        console.log(`рџ“Љ Pre-booked: ${prebookedSeats.length}, Already booked: ${alreadyBookedSeats.length}`);
         
     } catch (error) {
         console.error('Error pre-booking seats:', error);
@@ -1593,8 +1321,8 @@ async function generatePDFTicket(bookingData, qrCodeDataURL) {
             borderWidth: 1,
         });
         
-        // Top section - КГМА and GOLDENMIDDLE
-        page.drawText('КГМА', {
+        // Top section - РљР“РњРђ and GOLDENMIDDLE
+        page.drawText('РљР“РњРђ', {
             x: 300,
             y: 350,
             size: 24,
@@ -1757,21 +1485,21 @@ async function generatePDFTicket(bookingData, qrCodeDataURL) {
 // Send WhatsApp ticket
 async function sendWhatsAppTicket(phone, pdfBytes, ticketId, bookingData) {
     try {
-        console.log(`📱 Starting WhatsApp ticket sending for ${bookingData.firstName} ${bookingData.lastName} (${phone})`);
+        console.log(`рџ“± Starting WhatsApp ticket sending for ${bookingData.firstName} ${bookingData.lastName} (${phone})`);
         
         const phoneNumber = phone.replace(/[^\d]/g, '');
         const chatId = `${phoneNumber}@c.us`;
 
-        console.log(`📞 Processed phone number: ${phoneNumber}`);
-        console.log(`💬 Chat ID: ${chatId}`);
+        console.log(`рџ“ћ Processed phone number: ${phoneNumber}`);
+        console.log(`рџ’¬ Chat ID: ${chatId}`);
 
         // Send message first
         const messageData = {
             chatId: chatId,
-            message: `🎫 Hello, ${bookingData.firstName}!\n\nYour golden ticket for GOLDENMIDDLE is ready!\n\n📅 Date: October 26\n⏰ Time: 18:00\n📍 Venue: Asman\n🪑 Your seat: Table ${bookingData.table}, Seat ${bookingData.seat}\n💵 Price: 5500 Som\n🆔 Ticket ID: ${ticketId}\n\nTicket is attached. Show it at the event entrance!`
+            message: `рџЋ« Hello, ${bookingData.firstName}!\n\nYour golden ticket for GOLDENMIDDLE is ready!\n\nрџ“… Date: October 26\nвЏ° Time: 18:00\nрџ“Ќ Venue: Asman\nрџЄ‘ Your seat: Table ${bookingData.table}, Seat ${bookingData.seat}\nрџ’µ Price: 5500 Som\nрџ†” Ticket ID: ${ticketId}\n\nTicket is attached. Show it at the event entrance!`
         };
 
-        console.log('📤 Sending text message...');
+        console.log('рџ“¤ Sending text message...');
         const messageResponse = await axios.post(
             `${GREEN_API_URL}/waInstance${GREEN_API_ID}/sendMessage/${GREEN_API_TOKEN}`,
             messageData
@@ -1781,23 +1509,23 @@ async function sendWhatsAppTicket(phone, pdfBytes, ticketId, bookingData) {
             throw new Error('Failed to send WhatsApp message - no message ID returned');
         }
 
-        console.log('✅ WhatsApp message sent successfully, ID:', messageResponse.data.idMessage);
+        console.log('вњ… WhatsApp message sent successfully, ID:', messageResponse.data.idMessage);
 
         // Send the PDF file using undici's FormData
-        console.log('📄 Preparing PDF file for sending...');
-        console.log(`📊 PDF size: ${pdfBytes.length} bytes`);
+        console.log('рџ“„ Preparing PDF file for sending...');
+        console.log(`рџ“Љ PDF size: ${pdfBytes.length} bytes`);
         
         const formData = new FormData();
         formData.append('chatId', chatId);
         
         // Convert PDF buffer to Blob for undici FormData compatibility
         const pdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
-        console.log(`📄 Blob created: type=${pdfBlob.type}, size=${pdfBlob.size} bytes`);
+        console.log(`рџ“„ Blob created: type=${pdfBlob.type}, size=${pdfBlob.size} bytes`);
         
         formData.append('file', pdfBlob, 'ticket.pdf');
-        console.log('✅ PDF file added to FormData');
+        console.log('вњ… PDF file added to FormData');
 
-        console.log('📤 Sending PDF file via WhatsApp API...');
+        console.log('рџ“¤ Sending PDF file via WhatsApp API...');
         const fileResponse = await axios.post(
             `${GREEN_API_URL}/waInstance${GREEN_API_ID}/sendFileByUpload/${GREEN_API_TOKEN}`,
             formData,
@@ -1812,15 +1540,15 @@ async function sendWhatsAppTicket(phone, pdfBytes, ticketId, bookingData) {
             throw new Error('Failed to send WhatsApp file - no message ID returned');
         }
 
-        console.log('✅ WhatsApp ticket sent successfully!');
-        console.log(`📱 Recipient: ${phone}`);
-        console.log(`🎫 Ticket ID: ${ticketId}`);
-        console.log(`📄 File ID: ${fileResponse.data.idMessage}`);
+        console.log('вњ… WhatsApp ticket sent successfully!');
+        console.log(`рџ“± Recipient: ${phone}`);
+        console.log(`рџЋ« Ticket ID: ${ticketId}`);
+        console.log(`рџ“„ File ID: ${fileResponse.data.idMessage}`);
         
         return true;
     } catch (error) {
-        console.error('❌ Error sending WhatsApp ticket:', error.message);
-        console.error('📄 Error details:', {
+        console.error('вќЊ Error sending WhatsApp ticket:', error.message);
+        console.error('рџ“„ Error details:', {
             phone: phone,
             ticketId: ticketId,
             bookingName: `${bookingData.firstName} ${bookingData.lastName}`,
@@ -1837,7 +1565,7 @@ async function sendWhatsAppTicket(phone, pdfBytes, ticketId, bookingData) {
 // Generate ticket endpoint
 app.post('/api/generate-ticket', async (req, res) => {
     const { bookingId } = req.body;
-    console.log('🎫 Generate ticket request:', { bookingId, timestamp: new Date().toISOString() });
+    console.log('рџЋ« Generate ticket request:', { bookingId, timestamp: new Date().toISOString() });
 
     if (!bookingId) {
         return res.status(400).json({ error: 'bookingId is required' });
@@ -1852,17 +1580,17 @@ app.post('/api/generate-ticket', async (req, res) => {
         }
 
         const booking = bookingResult.rows[0];
-        console.log('📊 Found booking for ticket generation:', booking);
+        console.log('рџ“Љ Found booking for ticket generation:', booking);
 
         // Generate ticket
         let ticket = null;
         try {
-            console.log('🎫 Generating ticket for booking:', booking.id);
+            console.log('рџЋ« Generating ticket for booking:', booking.id);
             const { generateTicketForBooking } = require('./ticket-utils');
             ticket = await generateTicketForBooking(booking);
-            console.log('✅ Ticket generated successfully:', ticket);
+            console.log('вњ… Ticket generated successfully:', ticket);
         } catch (e) {
-            console.error('❌ Ticket generation error:', e);
+            console.error('вќЊ Ticket generation error:', e);
             return res.status(500).json({ error: 'Failed to generate ticket', details: e.message });
         }
 
@@ -1888,7 +1616,7 @@ app.post('/api/generate-ticket', async (req, res) => {
 // Resend ticket endpoint
 app.post('/api/resend-ticket', async (req, res) => {
     const { bookingId } = req.body;
-    console.log('📱 Resend ticket request:', { bookingId, timestamp: new Date().toISOString() });
+    console.log('рџ“± Resend ticket request:', { bookingId, timestamp: new Date().toISOString() });
 
     if (!bookingId) {
         return res.status(400).json({ error: 'bookingId is required' });
@@ -1903,7 +1631,7 @@ app.post('/api/resend-ticket', async (req, res) => {
         }
 
         const booking = bookingResult.rows[0];
-        console.log('📊 Found booking for ticket resend:', booking);
+        console.log('рџ“Љ Found booking for ticket resend:', booking);
 
         // Generate ticket if not exists
         let ticket = null;
@@ -1913,12 +1641,12 @@ app.post('/api/resend-ticket', async (req, res) => {
         } else {
             // Generate new ticket
             try {
-                console.log('🎫 Generating new ticket for resend:', booking.id);
+                console.log('рџЋ« Generating new ticket for resend:', booking.id);
                 const { generateTicketForBooking } = require('./ticket-utils');
                 ticket = await generateTicketForBooking(booking);
-                console.log('✅ New ticket generated for resend:', ticket);
+                console.log('вњ… New ticket generated for resend:', ticket);
             } catch (e) {
-                console.error('❌ Ticket generation error for resend:', e);
+                console.error('вќЊ Ticket generation error for resend:', e);
                 return res.status(500).json({ error: 'Failed to generate ticket', details: e.message });
             }
         }
@@ -1928,14 +1656,14 @@ app.post('/api/resend-ticket', async (req, res) => {
         try {
             const phoneToSend = booking.user_phone || booking.phone;
             if (phoneToSend && /^\+\d{10,15}$/.test(phoneToSend)) {
-                console.log('📱 Resending WhatsApp ticket to:', phoneToSend, 'ticket:', ticket?.ticketId);
+                console.log('рџ“± Resending WhatsApp ticket to:', phoneToSend, 'ticket:', ticket?.ticketId);
                 const { sendWhatsAppTicket } = require('./ticket-utils');
                 whatsappResult = await sendWhatsAppTicket(phoneToSend, ticket || { ticketId: null, path: null });
                 
                 if (whatsappResult.success) {
                     await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, updated_at = now() WHERE id=$2', 
                         [whatsappResult.textMessageId || whatsappResult.fileMessageId, booking.id]);
-                    console.log('✅ WhatsApp ticket resent successfully:', {
+                    console.log('вњ… WhatsApp ticket resent successfully:', {
                         phone: phoneToSend,
                         provider: whatsappResult.provider,
                         messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId,
@@ -1944,7 +1672,7 @@ app.post('/api/resend-ticket', async (req, res) => {
                 }
             }
         } catch (e) {
-            console.error('❌ WhatsApp resend error:', e);
+            console.error('вќЊ WhatsApp resend error:', e);
         }
 
         return res.json({
@@ -2061,8 +1789,8 @@ app.post('/api/create-booking', async (req, res) => {
         
         // Validate required fields
         if (!bookingData.table || !bookingData.seat) {
-            console.log('❌ Missing table or seat fields:', bookingData);
-            return res.status(400).json({ error: 'Неверный формат места. Требуются table и seat или seatId.' });
+            console.log('вќЊ Missing table or seat fields:', bookingData);
+            return res.status(400).json({ error: 'РќРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ РјРµСЃС‚Р°. РўСЂРµР±СѓСЋС‚СЃСЏ table Рё seat РёР»Рё seatId.' });
         }
         
         // Validate student name
@@ -2080,7 +1808,7 @@ app.post('/api/create-booking', async (req, res) => {
             return res.status(400).json({ error: 'Invalid WhatsApp number format. Please use E.164 format starting with + and containing 10-15 digits (e.g., +1234567890).' });
         }
         
-        console.log('✅ Booking data after parsing:', {
+        console.log('вњ… Booking data after parsing:', {
             id: bookingData.id,
             seatId: bookingData.seatId,
             table: bookingData.table,
@@ -2135,30 +1863,30 @@ app.post('/api/create-booking', async (req, res) => {
             timestamp: Date.now()
         });
         
-        console.log(`📡 API booking created broadcasted to ${adminCount} admin clients in admins room`);
+        console.log(`рџ“Ў API booking created broadcasted to ${adminCount} admin clients in admins room`);
         
         // Emit seat update to all connected clients
         emitSeatUpdate();
         
         res.json({
             success: true,
-            message: 'Бронирование создано успешно',
+            message: 'Р‘СЂРѕРЅРёСЂРѕРІР°РЅРёРµ СЃРѕР·РґР°РЅРѕ СѓСЃРїРµС€РЅРѕ',
             bookingId: bookingId
         });
         
     } catch (error) {
-        console.error('❌ Error creating booking:', error);
-        console.error('❌ Error message:', error.message);
-        console.error('❌ Error stack:', error.stack);
-        console.error('❌ Booking data that failed:', bookingData);
-        res.status(500).json({ error: 'Ошибка при создании бронирования' });
+        console.error('вќЊ Error creating booking:', error);
+        console.error('вќЊ Error message:', error.message);
+        console.error('вќЊ Error stack:', error.stack);
+        console.error('вќЊ Booking data that failed:', bookingData);
+        res.status(500).json({ error: 'РћС€РёР±РєР° РїСЂРё СЃРѕР·РґР°РЅРёРё Р±СЂРѕРЅРёСЂРѕРІР°РЅРёСЏ' });
     }
 });
 
 // Resend ticket endpoint
 app.post('/api/resend-ticket', async (req, res) => {
   const { bookingId } = req.body;
-  console.log('🔄 Resend ticket request:', { bookingId, timestamp: new Date().toISOString() });
+  console.log('рџ”„ Resend ticket request:', { bookingId, timestamp: new Date().toISOString() });
   
   if (!bookingId) return res.status(400).json({ error: 'bookingId required' });
 
@@ -2169,11 +1897,11 @@ app.post('/api/resend-ticket', async (req, res) => {
     const booking = (findRes.rows && findRes.rows[0]) ? findRes.rows[0] : null;
     
     if (!booking) {
-      console.error('❌ ResendTicket: booking not found', bookingId);
-      return res.status(404).json({ error: 'Бронирование не найдено' });
+      console.error('вќЊ ResendTicket: booking not found', bookingId);
+      return res.status(404).json({ error: 'Р‘СЂРѕРЅРёСЂРѕРІР°РЅРёРµ РЅРµ РЅР°Р№РґРµРЅРѕ' });
     }
 
-    console.log('🔄 Resending ticket for booking:', {
+    console.log('рџ”„ Resending ticket for booking:', {
       id: booking.id,
       booking_string_id: booking.booking_string_id,
       name: `${booking.first_name} ${booking.last_name}`,
@@ -2185,10 +1913,10 @@ app.post('/api/resend-ticket', async (req, res) => {
     try {
       const { generateTicketForBooking } = require('./ticket-utils');
       ticket = await generateTicketForBooking(booking);
-      console.log('🎫 Ticket regenerated:', ticket);
+      console.log('рџЋ« Ticket regenerated:', ticket);
     } catch (e) {
-      console.error('❌ Ticket generation error:', e);
-      return res.status(500).json({ error: 'Ошибка генерации билета' });
+      console.error('вќЊ Ticket generation error:', e);
+      return res.status(500).json({ error: 'РћС€РёР±РєР° РіРµРЅРµСЂР°С†РёРё Р±РёР»РµС‚Р°' });
     }
 
     // Send WhatsApp via Green API or simulation
@@ -2196,34 +1924,34 @@ app.post('/api/resend-ticket', async (req, res) => {
     try {
       const phone = booking.user_phone || booking.phone;
       if (phone && /^\+\d{10,15}$/.test(phone)) {
-        console.log('📱 Resending WhatsApp ticket to:', phone);
+        console.log('рџ“± Resending WhatsApp ticket to:', phone);
         const { sendWhatsAppTicket } = require('./ticket-utils');
         whatsappResult = await sendWhatsAppTicket(phone, ticket);
         
         if (whatsappResult.success) {
           await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, ticket_id = $2, updated_at = now() WHERE id=$3', 
             [whatsappResult.textMessageId || whatsappResult.fileMessageId, ticket?.ticketId, booking.id]);
-          console.log('✅ WhatsApp ticket resent successfully:', {
+          console.log('вњ… WhatsApp ticket resent successfully:', {
             phone: phone,
             provider: whatsappResult.provider,
             messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId,
             ticketId: ticket?.ticketId
           });
         } else {
-          console.error('❌ WhatsApp resend failed:', whatsappResult.error);
+          console.error('вќЊ WhatsApp resend failed:', whatsappResult.error);
           // Still update ticket_id even if WhatsApp fails
           if (ticket?.ticketId) {
             await db.query('UPDATE bookings SET ticket_id = $1, updated_at = now() WHERE id=$2', 
               [ticket.ticketId, booking.id]);
-            console.log('✅ Ticket ID saved despite WhatsApp resend failure');
+            console.log('вњ… Ticket ID saved despite WhatsApp resend failure');
           }
         }
       } else {
-        console.warn('⚠️ Invalid/missing phone for WhatsApp resend:', phone);
+        console.warn('вљ пёЏ Invalid/missing phone for WhatsApp resend:', phone);
         whatsappResult = { success: false, error: 'Invalid phone number' };
       }
     } catch (e) {
-      console.error('❌ WhatsApp resend error:', e);
+      console.error('вќЊ WhatsApp resend error:', e);
       whatsappResult = { success: false, error: e.message };
     }
 
@@ -2232,30 +1960,30 @@ app.post('/api/resend-ticket', async (req, res) => {
       const io = req.app.get('io');
       if (io) {
         io.emit('bookingUpdated', booking);
-        console.log('📡 bookingUpdated event emitted for resend');
+        console.log('рџ“Ў bookingUpdated event emitted for resend');
       }
     } catch (e) {
-      console.error('❌ Socket emit error during resend:', e);
+      console.error('вќЊ Socket emit error during resend:', e);
     }
 
     return res.json({
       success: whatsappResult.success,
-      message: whatsappResult.success ? 'Билет переотправлен в WhatsApp' : 'Ошибка отправки билета',
+      message: whatsappResult.success ? 'Р‘РёР»РµС‚ РїРµСЂРµРѕС‚РїСЂР°РІР»РµРЅ РІ WhatsApp' : 'РћС€РёР±РєР° РѕС‚РїСЂР°РІРєРё Р±РёР»РµС‚Р°',
       ticketId: ticket && ticket.ticketId || null,
       ticketPath: ticket && ticket.path || null,
       whatsappResult: whatsappResult
     });
 
   } catch (err) {
-    console.error('❌ ResendTicket error:', err);
-    return res.status(500).json({ error: 'Ошибка при переотправке билета', details: err.message });
+    console.error('вќЊ ResendTicket error:', err);
+    return res.status(500).json({ error: 'РћС€РёР±РєР° РїСЂРё РїРµСЂРµРѕС‚РїСЂР°РІРєРµ Р±РёР»РµС‚Р°', details: err.message });
   }
 });
 
-// User payment confirmation endpoint - for "Я оплатил" button
+// User payment confirmation endpoint - for "РЇ РѕРїР»Р°С‚РёР»" button
 app.post('/api/user-payment-confirm', async (req, res) => {
   const { seatId, studentName, phone } = req.body;
-  console.log('💳 User payment confirmation request:', {
+  console.log('рџ’і User payment confirmation request:', {
     seatId,
     studentName,
     phone,
@@ -2321,11 +2049,11 @@ app.post('/api/user-payment-confirm', async (req, res) => {
     );
 
     await db.query('COMMIT');
-    console.log('✅ User payment transaction committed successfully');
+    console.log('вњ… User payment transaction committed successfully');
 
     // Emit real-time updates
     try {
-      console.log('📡 Emitting user payment confirmation events...');
+      console.log('рџ“Ў Emitting user payment confirmation events...');
       if (io) {
         // Emit booking created event
         io.emit('update-seat-status', {
@@ -2352,15 +2080,15 @@ app.post('/api/user-payment-confirm', async (req, res) => {
         // Emit booking updated event
         io.emit('bookingUpdated', booking);
         
-        console.log('✅ User payment events emitted successfully');
+        console.log('вњ… User payment events emitted successfully');
       }
     } catch (e) {
-      console.error('❌ Socket emit error', e);
+      console.error('вќЊ Socket emit error', e);
     }
 
     return res.json({
       success: true,
-      message: 'Оплата подтверждена. Ожидайте подтверждения администратора.',
+      message: 'РћРїР»Р°С‚Р° РїРѕРґС‚РІРµСЂР¶РґРµРЅР°. РћР¶РёРґР°Р№С‚Рµ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ Р°РґРјРёРЅРёСЃС‚СЂР°С‚РѕСЂР°.',
       bookingId: bookingId,
       status: 'pending'
     });
@@ -2368,14 +2096,14 @@ app.post('/api/user-payment-confirm', async (req, res) => {
   } catch (err) {
     try { await db.query('ROLLBACK'); } catch(e) {}
     console.error('User payment confirmation error:', err);
-    return res.status(500).json({ error: 'Ошибка при подтверждении оплаты', details: err.message });
+    return res.status(500).json({ error: 'РћС€РёР±РєР° РїСЂРё РїРѕРґС‚РІРµСЂР¶РґРµРЅРёРё РѕРїР»Р°С‚С‹', details: err.message });
   }
 });
 
 // Confirm payment and generate ticket - ROBUST IMPLEMENTATION
 app.post('/api/confirm-payment', async (req, res) => {
   const { bookingId, paymentMethod, amount } = req.body;
-  console.log('🔍 Payment confirmation request:', {
+  console.log('рџ”Ќ Payment confirmation request:', {
     bookingId,
     paymentMethod,
     amount,
@@ -2386,15 +2114,15 @@ app.post('/api/confirm-payment', async (req, res) => {
 
   try {
     // First, let's check what bookings exist in the database
-    console.log('🔍 Checking all bookings in database...');
+    console.log('рџ”Ќ Checking all bookings in database...');
     const allBookingsRes = await db.query('SELECT id, booking_string_id, first_name, last_name, status FROM bookings ORDER BY created_at DESC LIMIT 10');
-    console.log('🔍 All bookings in database:', allBookingsRes.rows);
+    console.log('рџ”Ќ All bookings in database:', allBookingsRes.rows);
     
     // find booking by string id or numeric id
     const findSql = `SELECT * FROM bookings WHERE booking_string_id=$1 OR id::text = $1 LIMIT 1`;
     const findRes = await db.query(findSql, [bookingId]);
     const booking = (findRes.rows && findRes.rows[0]) ? findRes.rows[0] : null;
-    console.log('🔍 Booking lookup result:', {
+    console.log('рџ”Ќ Booking lookup result:', {
       found: !!booking,
       bookingId: bookingId,
       query: findSql,
@@ -2408,21 +2136,21 @@ app.post('/api/confirm-payment', async (req, res) => {
     });
     
     if (!booking) {
-      console.error('❌ ConfirmPayment: booking not found', bookingId);
-      return res.status(404).json({ error: 'Бронирование не найдено' });
+      console.error('вќЊ ConfirmPayment: booking not found', bookingId);
+      return res.status(404).json({ error: 'Р‘СЂРѕРЅРёСЂРѕРІР°РЅРёРµ РЅРµ РЅР°Р№РґРµРЅРѕ' });
     }
 
     if (booking.status === 'paid' || booking.status === 'confirmed') {
       console.log('ConfirmPayment: idempotent - already paid', booking.booking_string_id || booking.id);
-      return res.json({ success: true, message: 'Оплата уже подтверждена', bookingId: booking.booking_string_id || booking.id });
+      return res.json({ success: true, message: 'РћРїР»Р°С‚Р° СѓР¶Рµ РїРѕРґС‚РІРµСЂР¶РґРµРЅР°', bookingId: booking.booking_string_id || booking.id });
     }
 
     if (booking.status !== 'pending') {
       console.log('ConfirmPayment: booking not in pending status', booking.status);
-      return res.status(400).json({ error: 'Бронирование не ожидает подтверждения', currentStatus: booking.status });
+      return res.status(400).json({ error: 'Р‘СЂРѕРЅРёСЂРѕРІР°РЅРёРµ РЅРµ РѕР¶РёРґР°РµС‚ РїРѕРґС‚РІРµСЂР¶РґРµРЅРёСЏ', currentStatus: booking.status });
     }
 
-    console.log('💳 Starting payment transaction...');
+    console.log('рџ’і Starting payment transaction...');
     await db.query('BEGIN');
 
     const paymentData = {
@@ -2435,21 +2163,21 @@ app.post('/api/confirm-payment', async (req, res) => {
       raw_payload: JSON.stringify(req.body)
     };
     
-    console.log('💳 Inserting payment record:', paymentData);
+    console.log('рџ’і Inserting payment record:', paymentData);
     const txnRes = await db.query(
       `INSERT INTO payments (transaction_id, booking_id, user_phone, amount, status, provider, raw_payload, created_at)
        VALUES ($1,$2,$3,$4,$5,$6,$7,now()) RETURNING id`,
       [paymentData.transaction_id, paymentData.booking_id, paymentData.user_phone, paymentData.amount, paymentData.status, paymentData.provider, paymentData.raw_payload]
     );
 
-    console.log('📝 Updating booking status to paid...');
+    console.log('рџ“ќ Updating booking status to paid...');
     const updateRes = await db.query(
       `UPDATE bookings SET status=$1, updated_at=now() WHERE id=$2 RETURNING *`,
       ['paid', booking.id]
     );
 
     const updatedBooking = updateRes.rows[0];
-    console.log('✅ Booking updated:', {
+    console.log('вњ… Booking updated:', {
       id: updatedBooking.id,
       booking_string_id: updatedBooking.booking_string_id,
       status: updatedBooking.status,
@@ -2457,41 +2185,41 @@ app.post('/api/confirm-payment', async (req, res) => {
     });
     
     await db.query('COMMIT');
-    console.log('✅ Payment transaction committed successfully');
+    console.log('вњ… Payment transaction committed successfully');
 
     // generate ticket using enhanced template system
     let ticket = null;
     let publicPdfUrl = null;
     try {
-      console.log('🎫 Generating ticket for booking:', updatedBooking.id);
+      console.log('рџЋ« Generating ticket for booking:', updatedBooking.id);
       const { generateTicketForBooking, uploadFileToSupabase } = require('./enhanced-ticket-utils');
       ticket = await generateTicketForBooking(updatedBooking);
-      console.log('✅ Ticket generated successfully:', ticket);
+      console.log('вњ… Ticket generated successfully:', ticket);
       
       // Upload PDF to external storage
       if (ticket && ticket.localPath) {
-        console.log('📤 Uploading ticket file to external storage...');
+        console.log('рџ“¤ Uploading ticket file to external storage...');
         const pdfFileName = path.basename(ticket.localPath);
         
         try {
           // Upload PDF
           publicPdfUrl = await uploadFileToSupabase(ticket.localPath, `tickets/${pdfFileName}`);
-          console.log('✅ PDF uploaded to Supabase:', publicPdfUrl);
+          console.log('вњ… PDF uploaded to Supabase:', publicPdfUrl);
           
           // Update booking with public URL
           await db.query('UPDATE bookings SET ticket_path = $1 WHERE id = $2', 
             [publicPdfUrl, updatedBooking.id]);
           
         } catch (uploadError) {
-          console.error('❌ Failed to upload to Supabase:', uploadError);
+          console.error('вќЊ Failed to upload to Supabase:', uploadError);
           // Fallback to production URL
           const baseUrl = process.env.PUBLIC_BASE_URL || 'https://upbeat-compassion-production.up.railway.app';
           publicPdfUrl = `${baseUrl}${ticket.path}`;
-          console.log('📎 Using production URL for PDF:', publicPdfUrl);
+          console.log('рџ“Ћ Using production URL for PDF:', publicPdfUrl);
         }
       }
     } catch (e) {
-      console.error('❌ Ticket generation error:', e);
+      console.error('вќЊ Ticket generation error:', e);
     }
 
     // send whatsapp via Green API with enhanced Russian text
@@ -2499,13 +2227,13 @@ app.post('/api/confirm-payment', async (req, res) => {
     try {
       const phone = updatedBooking.user_phone || updatedBooking.phone;
       if (phone && /^\+\d{10,15}$/.test(phone)) {
-        console.log('📱 Sending WhatsApp ticket to:', phone, 'ticket:', ticket?.ticketId);
+        console.log('рџ“± Sending WhatsApp ticket to:', phone, 'ticket:', ticket?.ticketId);
         
         // Use public URL for Green API - ensure it's a valid URL
         const baseUrl = process.env.PUBLIC_BASE_URL || 'https://upbeat-compassion-production.up.railway.app';
         const pdfUrl = publicPdfUrl || (ticket && ticket.localPath ? `${baseUrl}${ticket.path}` : null);
         
-        console.log('🔗 Ticket URL for WhatsApp:', { 
+        console.log('рџ”— Ticket URL for WhatsApp:', { 
           pdfUrl, 
           ticket: ticket ? {
             ticketId: ticket.ticketId,
@@ -2535,7 +2263,7 @@ app.post('/api/confirm-payment', async (req, res) => {
           // Green API succeeded - update booking to paid
           await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, ticket_id = $2, updated_at = now() WHERE id=$3', 
             [whatsappResult.textMessageId || whatsappResult.pdfMessageId, ticket?.ticketId, updatedBooking.id]);
-          console.log('✅ WhatsApp sent successfully:', {
+          console.log('вњ… WhatsApp sent successfully:', {
             phone: phone,
             provider: whatsappResult.provider,
             textMessageId: whatsappResult.textMessageId,
@@ -2544,7 +2272,7 @@ app.post('/api/confirm-payment', async (req, res) => {
           });
         } else {
           // Green API failed - set status to confirmation_failed
-          console.error('❌ WhatsApp send failed:', whatsappResult.error);
+          console.error('вќЊ WhatsApp send failed:', whatsappResult.error);
           const errorDetails = JSON.stringify(whatsappResult.details || whatsappResult.error);
           // Try to update with confirmation_error column, fallback if it doesn't exist
           try {
@@ -2552,14 +2280,14 @@ app.post('/api/confirm-payment', async (req, res) => {
               ['confirmation_failed', 'FAILED-' + Date.now(), errorDetails, updatedBooking.id]);
           } catch (dbError) {
             if (dbError.message.includes('confirmation_error')) {
-              console.warn('⚠️ confirmation_error column not found, updating without it');
+              console.warn('вљ пёЏ confirmation_error column not found, updating without it');
               await db.query('UPDATE bookings SET status = $1, whatsapp_sent = false, whatsapp_message_id = $2, updated_at = now() WHERE id=$3', 
                 ['confirmation_failed', 'FAILED-' + Date.now(), updatedBooking.id]);
             } else {
               throw dbError;
             }
           }
-          console.log('❌ Booking status set to confirmation_failed due to WhatsApp failure');
+          console.log('вќЊ Booking status set to confirmation_failed due to WhatsApp failure');
           
           // Return error to admin UI
           return res.status(502).json({ 
@@ -2571,46 +2299,46 @@ app.post('/api/confirm-payment', async (req, res) => {
           });
         }
       } else {
-        console.warn('⚠️ Invalid/missing phone, cannot send WhatsApp ticket', phone);
+        console.warn('вљ пёЏ Invalid/missing phone, cannot send WhatsApp ticket', phone);
         whatsappResult = { success: false, error: 'Invalid phone number' };
         // Still update ticket_id even if no phone
         if (ticket?.ticketId) {
           await db.query('UPDATE bookings SET ticket_id = $1, whatsapp_sent = false, whatsapp_message_id = $2, updated_at = now() WHERE id=$3', 
             [ticket.ticketId, 'NO_PHONE-' + Date.now(), updatedBooking.id]);
-          console.log('✅ Ticket ID saved despite invalid phone');
+          console.log('вњ… Ticket ID saved despite invalid phone');
         }
       }
     } catch (e) {
-      console.error('❌ WhatsApp send error:', e);
+      console.error('вќЊ WhatsApp send error:', e);
       whatsappResult = { success: false, error: e.message };
       // Still update ticket_id even if exception occurs
       if (ticket?.ticketId) {
         await db.query('UPDATE bookings SET ticket_id = $1, whatsapp_sent = true, whatsapp_message_id = $2, updated_at = now() WHERE id=$3', 
           [ticket.ticketId, 'EXCEPTION-' + Date.now(), updatedBooking.id]);
-        console.log('✅ Ticket ID saved despite WhatsApp exception');
+        console.log('вњ… Ticket ID saved despite WhatsApp exception');
       }
     }
 
     // emit real-time update
     try {
-      console.log('📡 Emitting booking:confirmed event...');
+      console.log('рџ“Ў Emitting booking:confirmed event...');
       if (io) {
         io.emit('booking:confirmed', { 
           seatId: updatedBooking.seat, 
           status: 'paid',
           bookingId: updatedBooking.booking_string_id || updatedBooking.id
         });
-        console.log('✅ booking:confirmed event emitted successfully');
+        console.log('вњ… booking:confirmed event emitted successfully');
       } else {
-        console.warn('⚠️ Socket.IO not available for real-time updates');
+        console.warn('вљ пёЏ Socket.IO not available for real-time updates');
       }
     } catch (e) {
-      console.error('❌ Socket emit error', e);
+      console.error('вќЊ Socket emit error', e);
     }
 
     return res.json({
       success: true,
-      message: 'Оплата подтверждена и билет отправлен в WhatsApp',
+      message: 'РћРїР»Р°С‚Р° РїРѕРґС‚РІРµСЂР¶РґРµРЅР° Рё Р±РёР»РµС‚ РѕС‚РїСЂР°РІР»РµРЅ РІ WhatsApp',
       ticketId: ticket && ticket.ticketId || null,
       ticketPath: publicPdfUrl || (ticket && ticket.path) || null,
       whatsappResult: whatsappResult
@@ -2619,7 +2347,7 @@ app.post('/api/confirm-payment', async (req, res) => {
     try { await db.query('ROLLBACK'); } catch(e) {}
     console.error('ConfirmPayment error:', err);
     console.error('Error stack:', err.stack);
-    return res.status(500).json({ error: 'Ошибка при подтверждении оплаты', details: err.message });
+    return res.status(500).json({ error: 'РћС€РёР±РєР° РїСЂРё РїРѕРґС‚РІРµСЂР¶РґРµРЅРёРё РѕРїР»Р°С‚С‹', details: err.message });
   }
 });
 
@@ -2679,19 +2407,19 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
             timestamp: Date.now()
         });
         
-        console.log(`📡 Booking deleted broadcasted to ${adminCount} admin clients in admins room`);
+        console.log(`рџ“Ў Booking deleted broadcasted to ${adminCount} admin clients in admins room`);
         
         // Emit seat update to all connected clients
         emitSeatUpdate();
         
         res.json({
             success: true,
-            message: 'Бронирование удалено'
+            message: 'Р‘СЂРѕРЅРёСЂРѕРІР°РЅРёРµ СѓРґР°Р»РµРЅРѕ'
         });
         
     } catch (error) {
         console.error('Error deleting booking:', error);
-        res.status(500).json({ error: 'Ошибка при удалении бронирования' });
+        res.status(500).json({ error: 'РћС€РёР±РєР° РїСЂРё СѓРґР°Р»РµРЅРёРё Р±СЂРѕРЅРёСЂРѕРІР°РЅРёСЏ' });
     }
 });
 
@@ -2716,7 +2444,7 @@ app.get('/api/bookings', async (req, res) => {
         res.json(formattedBookings);
     } catch (error) {
         console.error('Error loading bookings:', error);
-        res.status(500).json({ error: 'Ошибка при загрузке бронирований' });
+        res.status(500).json({ error: 'РћС€РёР±РєР° РїСЂРё Р·Р°РіСЂСѓР·РєРµ Р±СЂРѕРЅРёСЂРѕРІР°РЅРёР№' });
     }
 });
 
@@ -2726,7 +2454,7 @@ app.post('/api/sync-bookings', async (req, res) => {
         const { bookings } = req.body;
         
         if (!bookings || typeof bookings !== 'object') {
-            return res.status(400).json({ error: 'Неверный формат данных бронирований' });
+            return res.status(400).json({ error: 'РќРµРІРµСЂРЅС‹Р№ С„РѕСЂРјР°С‚ РґР°РЅРЅС‹С… Р±СЂРѕРЅРёСЂРѕРІР°РЅРёР№' });
         }
         
         const bookingsPath = path.join(__dirname, 'bookings.json');
@@ -2751,13 +2479,13 @@ app.post('/api/sync-bookings', async (req, res) => {
         
         res.json({
             success: true,
-            message: `Синхронизировано ${syncedCount} бронирований`,
+            message: `РЎРёРЅС…СЂРѕРЅРёР·РёСЂРѕРІР°РЅРѕ ${syncedCount} Р±СЂРѕРЅРёСЂРѕРІР°РЅРёР№`,
             syncedCount: syncedCount
         });
         
     } catch (error) {
         console.error('Error syncing bookings:', error);
-        res.status(500).json({ error: 'Ошибка при синхронизации бронирований' });
+        res.status(500).json({ error: 'РћС€РёР±РєР° РїСЂРё СЃРёРЅС…СЂРѕРЅРёР·Р°С†РёРё Р±СЂРѕРЅРёСЂРѕРІР°РЅРёР№' });
     }
 });
 
@@ -2769,7 +2497,7 @@ app.get('/tickets/:filename', (req, res) => {
     if (fs.existsSync(filePath)) {
         res.sendFile(filePath);
     } else {
-        res.status(404).json({ error: 'Файл билета не найден' });
+        res.status(404).json({ error: 'Р¤Р°Р№Р» Р±РёР»РµС‚Р° РЅРµ РЅР°Р№РґРµРЅ' });
     }
 });
 
@@ -2925,7 +2653,7 @@ app.post('/api/payments/webhook', async (req, res) => {
     try {
         const { transaction_id, status, amount, currency } = req.body;
         
-        console.log('📞 Payment webhook received:', { transaction_id, status, amount, currency });
+        console.log('рџ“ћ Payment webhook received:', { transaction_id, status, amount, currency });
         
         // Load payments
         const paymentsPath = path.join(__dirname, 'payments.json');
@@ -2982,9 +2710,9 @@ app.post('/api/payments/webhook', async (req, res) => {
                     // Send WhatsApp ticket
                     await sendWhatsAppTicket(booking.phone, pdfBytes, ticketId, booking);
                     
-                    console.log('✅ Payment confirmed and ticket sent for booking:', bookingId);
+                    console.log('вњ… Payment confirmed and ticket sent for booking:', bookingId);
                 } catch (ticketError) {
-                    console.error('❌ Error generating/sending ticket:', ticketError);
+                    console.error('вќЊ Error generating/sending ticket:', ticketError);
                 }
             }
         }
@@ -3152,9 +2880,9 @@ app.post('/api/secure-tickets/generate', async (req, res) => {
             eventName: eventName || 'GOLDENMIDDLE',
             eventDate: eventDate || '2025-10-26',
             eventTime: eventTime || '18:00',
-            eventVenue: eventVenue || 'Асман',
+            eventVenue: eventVenue || 'РђСЃРјР°РЅ',
             price: price || 5500,
-            currency: currency || 'Сом'
+            currency: currency || 'РЎРѕРј'
         };
 
         const result = await secureTicketSystem.createSecureTicket(ticketInfo);
@@ -3521,12 +3249,12 @@ app.get('/api/secure-tickets/all', (req, res) => {
 
 // Socket.IO events for ticket management
 io.on('connection', (socket) => {
-    console.log('🔌 Client connected to ticket management:', socket.id);
+    console.log('рџ”Њ Client connected to ticket management:', socket.id);
     
     // Join admin room for ticket updates
     socket.on('join-admin', () => {
         socket.join('admins');
-        console.log('👤 Admin joined ticket management room');
+        console.log('рџ‘¤ Admin joined ticket management room');
     });
     
     // Handle ticket scanning events
@@ -3542,7 +3270,7 @@ io.on('connection', (socket) => {
                 timestamp: new Date().toISOString()
             });
             
-            console.log(`📡 Ticket scan event emitted for ${ticketId}`);
+            console.log(`рџ“Ў Ticket scan event emitted for ${ticketId}`);
         } catch (error) {
             socket.emit('ticket-scan-error', {
                 error: error.message,
@@ -3560,25 +3288,25 @@ io.on('connection', (socket) => {
             timestamp: new Date().toISOString()
         });
         
-        console.log(`📡 Ticket addition event emitted for ${ticketData.ticketId}`);
+        console.log(`рџ“Ў Ticket addition event emitted for ${ticketData.ticketId}`);
     });
     
     socket.on('disconnect', () => {
-        console.log('🔌 Client disconnected from ticket management:', socket.id);
+        console.log('рџ”Њ Client disconnected from ticket management:', socket.id);
     });
 });
 
 // Test endpoint to manually trigger seat updates
 app.post('/api/test/emit-seat-update', (req, res) => {
     try {
-        console.log('🧪 Manual seat update triggered via API');
-        console.log('📊 Current connected clients:', io.engine.clientsCount);
+        console.log('рџ§Є Manual seat update triggered via API');
+        console.log('рџ“Љ Current connected clients:', io.engine.clientsCount);
         
         // Get room information
         const adminsRoom = io.sockets.adapter.rooms.get('admins');
         const adminCount = adminsRoom ? adminsRoom.size : 0;
         
-        console.log('📊 Admin clients in room:', adminCount);
+        console.log('рџ“Љ Admin clients in room:', adminCount);
         
         // Emit seat update
         emitSeatUpdate();
@@ -3602,7 +3330,7 @@ app.post('/api/test/emit-seat-update', (req, res) => {
 // Helper function to generate ticket for booking
 async function generateTicketForBooking(booking, ticketId) {
     try {
-        console.log('🎫 Generating ticket for booking:', booking.id);
+        console.log('рџЋ« Generating ticket for booking:', booking.id);
         
         const ticketFileName = `${ticketId}.txt`;
         const ticketPath = path.join(__dirname, 'tickets', ticketFileName);
@@ -3641,7 +3369,7 @@ Thank you for your booking!
         // Save ticket file
         await fs.writeFile(ticketPath, ticketContent);
         
-        console.log('✅ Ticket generated successfully:', ticketPath);
+        console.log('вњ… Ticket generated successfully:', ticketPath);
         
         return {
             success: true,
@@ -3650,7 +3378,7 @@ Thank you for your booking!
         };
         
     } catch (error) {
-        console.error('❌ Error generating ticket:', error);
+        console.error('вќЊ Error generating ticket:', error);
         return {
             success: false,
             error: error.message
@@ -3661,7 +3389,7 @@ Thank you for your booking!
 // Helper function to send WhatsApp ticket
 async function sendWhatsAppTicket(phone, ticketResult, booking) {
     try {
-        console.log('📱 Sending WhatsApp ticket to:', phone);
+        console.log('рџ“± Sending WhatsApp ticket to:', phone);
         
         // Validate WhatsApp number format
         const phoneRegex = /^\+\d{10,15}$/;
@@ -3670,7 +3398,7 @@ async function sendWhatsAppTicket(phone, ticketResult, booking) {
         }
         
         // Generate WhatsApp message
-        const whatsappMessage = `🎫 *TICKET CONFIRMED* 🎫
+        const whatsappMessage = `рџЋ« *TICKET CONFIRMED* рџЋ«
 
 *Ticket ID:* ${ticketResult.content.match(/Ticket ID: (.*)/)?.[1] || 'N/A'}
 *Event:* University Event
@@ -3678,27 +3406,27 @@ async function sendWhatsAppTicket(phone, ticketResult, booking) {
 *Time:* ${new Date().toLocaleTimeString('ru-RU')}
 
 *Student Information:*
-• Name: ${booking.first_name} ${booking.last_name}
-• Phone: ${phone}
-• Table: ${booking.table_number}
-• Seat: ${booking.seat_number}
+вЂў Name: ${booking.first_name} ${booking.last_name}
+вЂў Phone: ${phone}
+вЂў Table: ${booking.table_number}
+вЂў Seat: ${booking.seat_number}
 
-*Status:* ✅ CONFIRMED & PAID
+*Status:* вњ… CONFIRMED & PAID
 *Payment Date:* ${new Date().toLocaleString('ru-RU')}
 
 This ticket is valid for entry to the event.
 Please present this ticket at the entrance.
 
-Thank you for your booking! 🎓`;
+Thank you for your booking! рџЋ“`;
 
         // Simulate WhatsApp sending (in production, integrate with WhatsApp Business API)
-        console.log('📱 WhatsApp message content:');
+        console.log('рџ“± WhatsApp message content:');
         console.log(whatsappMessage);
         
         // In production, replace this with actual WhatsApp API call:
         // const whatsappResponse = await sendWhatsAppMessage(phone, whatsappMessage, ticketResult.path);
         
-        console.log('✅ WhatsApp ticket sent successfully');
+        console.log('вњ… WhatsApp ticket sent successfully');
         
         return {
             success: true,
@@ -3707,7 +3435,7 @@ Thank you for your booking! 🎓`;
         };
         
     } catch (error) {
-        console.error('❌ Error sending WhatsApp ticket:', error);
+        console.error('вќЊ Error sending WhatsApp ticket:', error);
         return {
             success: false,
             error: error.message
@@ -3718,7 +3446,7 @@ Thank you for your booking! 🎓`;
 // Database investigation endpoint
 app.get('/api/debug/db-investigation', async (req, res) => {
     try {
-        console.log('🔍 Running database investigation...');
+        console.log('рџ”Ќ Running database investigation...');
         
         // 1. Check table structure
         const columnsResult = await db.query(`
@@ -3774,7 +3502,7 @@ app.get('/api/debug/db-investigation', async (req, res) => {
         });
         
     } catch (error) {
-        console.error('❌ Database investigation error:', error);
+        console.error('вќЊ Database investigation error:', error);
         res.status(500).json({ error: error.message, stack: error.stack });
     }
 });
@@ -3792,7 +3520,7 @@ app.get('/api/test/socket-status', (req, res) => {
             timestamp: new Date().toISOString()
         };
         
-        console.log('📊 Socket.IO Status:', status);
+        console.log('рџ“Љ Socket.IO Status:', status);
         
         res.json({
             success: true,
@@ -3832,12 +3560,12 @@ module.exports = app;
 
 // Global error handlers
 process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection at:', promise, 'reason:', reason);
+    console.error('вќЊ Unhandled Rejection at:', promise, 'reason:', reason);
     // Don't exit the process, just log the error
 });
 
 process.on('uncaughtException', (error) => {
-    console.error('❌ Uncaught Exception:', error);
+    console.error('вќЊ Uncaught Exception:', error);
     // Don't exit the process, just log the error
 });
 
@@ -3850,23 +3578,23 @@ async function startServer() {
         // Start the server
         server.listen(PORT, '0.0.0.0', (err) => {
             if (err) {
-                console.error('❌ Failed to start server:', err);
+                console.error('вќЊ Failed to start server:', err);
                 if (err.code === 'EADDRINUSE') {
-                    console.error(`❌ Port ${PORT} is already in use. Please stop the other process or use a different port.`);
-                    console.error('💡 Try: netstat -ano | findstr :3000 (Windows) or lsof -i :3000 (Mac/Linux)');
-                    console.error('💡 Or kill the process: taskkill /PID <pid> /F (Windows)');
+                    console.error(`вќЊ Port ${PORT} is already in use. Please stop the other process or use a different port.`);
+                    console.error('рџ’Ў Try: netstat -ano | findstr :3000 (Windows) or lsof -i :3000 (Mac/Linux)');
+                    console.error('рџ’Ў Or kill the process: taskkill /PID <pid> /F (Windows)');
                 }
                 process.exit(1);
             }
             
-            console.log('🚀 Server started successfully!');
-            console.log(`🌐 HTTP Server: http://localhost:${PORT}`);
-            console.log(`🔌 Socket.IO Server: ws://localhost:${PORT}/socket.io/`);
-            console.log('📱 Admin panel: http://localhost:3000/admin.html');
-            console.log('🎓 Student portal: http://localhost:3000/index.html');
-            console.log('🧪 Test page: http://localhost:3000/socket-test.html');
+            console.log('рџљЂ Server started successfully!');
+            console.log(`рџЊђ HTTP Server: http://localhost:${PORT}`);
+            console.log(`рџ”Њ Socket.IO Server: ws://localhost:${PORT}/socket.io/`);
+            console.log('рџ“± Admin panel: http://localhost:3000/admin.html');
+            console.log('рџЋ“ Student portal: http://localhost:3000/index.html');
+            console.log('рџ§Є Test page: http://localhost:3000/socket-test.html');
             console.log('');
-            console.log('🔐 API Endpoints:');
+            console.log('рџ”ђ API Endpoints:');
             console.log('  POST /api/create-booking - Create new booking');
             console.log('  POST /api/confirm-payment - Confirm payment');
             console.log('  DELETE /api/delete-booking/:id - Delete booking');
@@ -3874,20 +3602,20 @@ async function startServer() {
             console.log('  POST /api/test/emit-seat-update - Test seat update');
             console.log('  GET  /api/test/socket-info - Socket.IO info');
             console.log('');
-            console.log('🔌 Socket.IO Events:');
+            console.log('рџ”Њ Socket.IO Events:');
             console.log('  seatUpdate - Real-time seat status updates');
             console.log('  connected - Connection confirmation');
             console.log('  test - Test event');
             console.log('  requestSeatData - Request current seat data');
             console.log('  ping/pong - Connection health check');
             console.log('');
-            console.log('🎯 Ready for real-time seat booking!');
+            console.log('рџЋЇ Ready for real-time seat booking!');
             
             // Emit initial seat update
             emitSeatUpdate();
         });
     } catch (error) {
-        console.error('❌ Failed to initialize application:', error);
+        console.error('вќЊ Failed to initialize application:', error);
         process.exit(1);
     }
 }
@@ -3897,10 +3625,10 @@ startServer();
 
 // Handle server errors
 server.on('error', (err) => {
-    console.error('❌ Server error:', err);
+    console.error('вќЊ Server error:', err);
     if (err.code === 'EADDRINUSE') {
-        console.error(`❌ Port ${PORT} is already in use.`);
-        console.error('💡 Solutions:');
+        console.error(`вќЊ Port ${PORT} is already in use.`);
+        console.error('рџ’Ў Solutions:');
         console.error('  1. Stop the existing process using this port');
         console.error('  2. Change the port in config.js');
         console.error('  3. Kill the process: taskkill /PID <pid> /F (Windows)');
@@ -3910,7 +3638,7 @@ server.on('error', (err) => {
 // Bulk confirmation endpoint - automatically send WhatsApp tickets for confirmed bookings
 app.post('/api/bulk-confirm-payments', async (req, res) => {
   try {
-    console.log('🔄 Bulk confirmation request received');
+    console.log('рџ”„ Bulk confirmation request received');
     
     // Get all pending bookings
     const pendingBookings = await db.query(`
@@ -3929,13 +3657,13 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
       });
     }
     
-    console.log(`📋 Found ${pendingBookings.rows.length} pending bookings to process`);
+    console.log(`рџ“‹ Found ${pendingBookings.rows.length} pending bookings to process`);
     
     const results = [];
     
     for (const booking of pendingBookings.rows) {
       try {
-        console.log(`🔄 Processing booking ${booking.booking_string_id || booking.id}...`);
+        console.log(`рџ”„ Processing booking ${booking.booking_string_id || booking.id}...`);
         
         // Update booking status to paid
         await db.query('UPDATE bookings SET status = $1, updated_at = now() WHERE id = $2', 
@@ -3946,7 +3674,7 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
         const ticket = await generateTicketForBooking(booking);
         
         if (!ticket || !ticket.ticketId) {
-          console.error(`❌ Failed to generate ticket for booking ${booking.id}`);
+          console.error(`вќЊ Failed to generate ticket for booking ${booking.id}`);
           results.push({
             bookingId: booking.booking_string_id || booking.id,
             success: false,
@@ -3977,7 +3705,7 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
               if (fs.existsSync(ticket.imageLocalPath)) fs.unlinkSync(ticket.imageLocalPath);
             }
           } catch (uploadError) {
-            console.warn(`⚠️ Upload failed for booking ${booking.id}, using local URLs:`, uploadError.message);
+            console.warn(`вљ пёЏ Upload failed for booking ${booking.id}, using local URLs:`, uploadError.message);
             // Fallback to local URLs
             const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
             publicPdfUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}`;
@@ -4004,7 +3732,7 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
             await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, updated_at = now() WHERE id = $2', 
               [whatsappResult.imageMessageId || whatsappResult.pdfMessageId, booking.id]);
             
-            console.log(`✅ WhatsApp sent for booking ${booking.booking_string_id || booking.id}:`, whatsappResult.pdfMessageId || whatsappResult.imageMessageId);
+            console.log(`вњ… WhatsApp sent for booking ${booking.booking_string_id || booking.id}:`, whatsappResult.pdfMessageId || whatsappResult.imageMessageId);
             
             results.push({
               bookingId: booking.booking_string_id || booking.id,
@@ -4014,7 +3742,7 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
               phone: phone
             });
           } else {
-            console.error(`❌ WhatsApp failed for booking ${booking.id}:`, whatsappResult.error);
+            console.error(`вќЊ WhatsApp failed for booking ${booking.id}:`, whatsappResult.error);
             await db.query('UPDATE bookings SET status = $1, confirmation_error = $2, updated_at = now() WHERE id = $3', 
               ['confirmation_failed', JSON.stringify(whatsappResult.error), booking.id]);
             
@@ -4025,7 +3753,7 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
             });
           }
         } else {
-          console.warn(`⚠️ Invalid phone for booking ${booking.id}: ${phone}`);
+          console.warn(`вљ пёЏ Invalid phone for booking ${booking.id}: ${phone}`);
           results.push({
             bookingId: booking.booking_string_id || booking.id,
             success: false,
@@ -4037,7 +3765,7 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
         await new Promise(resolve => setTimeout(resolve, 1000));
         
       } catch (bookingError) {
-        console.error(`❌ Error processing booking ${booking.id}:`, bookingError);
+        console.error(`вќЊ Error processing booking ${booking.id}:`, bookingError);
         results.push({
           bookingId: booking.booking_string_id || booking.id,
           success: false,
@@ -4052,7 +3780,7 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
     const successCount = results.filter(r => r.success).length;
     const failureCount = results.filter(r => !r.success).length;
     
-    console.log(`✅ Bulk confirmation completed: ${successCount} successful, ${failureCount} failed`);
+    console.log(`вњ… Bulk confirmation completed: ${successCount} successful, ${failureCount} failed`);
     
     res.json({
       success: true,
@@ -4064,7 +3792,7 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Bulk confirmation error:', error);
+    console.error('вќЊ Bulk confirmation error:', error);
     res.status(500).json({
       success: false,
       message: 'Bulk confirmation failed',
@@ -4076,7 +3804,7 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
 // Send WhatsApp tickets for bookings that have ticketId but no WhatsApp sent
 app.post('/api/send-pending-tickets', async (req, res) => {
   try {
-    console.log('📱 Sending pending tickets request received');
+    console.log('рџ“± Sending pending tickets request received');
     
     // Get bookings that have ticketId but no WhatsApp sent
     const pendingTickets = await db.query(`
@@ -4097,17 +3825,17 @@ app.post('/api/send-pending-tickets', async (req, res) => {
       });
     }
     
-    console.log(`📋 Found ${pendingTickets.rows.length} bookings with pending tickets`);
+    console.log(`рџ“‹ Found ${pendingTickets.rows.length} bookings with pending tickets`);
     
     const results = [];
     
     for (const booking of pendingTickets.rows) {
       try {
-        console.log(`📱 Sending ticket for booking ${booking.booking_string_id || booking.id}...`);
+        console.log(`рџ“± Sending ticket for booking ${booking.booking_string_id || booking.id}...`);
         
         const phone = booking.user_phone;
         if (!phone || !/^\+\d{10,15}$/.test(phone)) {
-          console.warn(`⚠️ Invalid phone for booking ${booking.id}: ${phone}`);
+          console.warn(`вљ пёЏ Invalid phone for booking ${booking.id}: ${phone}`);
           results.push({
             bookingId: booking.booking_string_id || booking.id,
             success: false,
@@ -4129,7 +3857,7 @@ app.post('/api/send-pending-tickets', async (req, res) => {
         
         // If no URLs available, try to generate ticket
         if (!pdfUrl && !imageUrl) {
-          console.log(`🎫 Generating new ticket for booking ${booking.id}...`);
+          console.log(`рџЋ« Generating new ticket for booking ${booking.id}...`);
           const { generateTicketForBooking, uploadFileToSupabase } = require('./ticket-utils');
           const ticket = await generateTicketForBooking(booking);
           
@@ -4153,7 +3881,7 @@ app.post('/api/send-pending-tickets', async (req, res) => {
                   if (fs.existsSync(ticket.imageLocalPath)) fs.unlinkSync(ticket.imageLocalPath);
                 }
               } catch (uploadError) {
-                console.warn(`⚠️ Upload failed for booking ${booking.id}, using local URLs:`, uploadError.message);
+                console.warn(`вљ пёЏ Upload failed for booking ${booking.id}, using local URLs:`, uploadError.message);
                 // Fallback to local URLs
                 const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
                 pdfUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}`;
@@ -4177,7 +3905,7 @@ app.post('/api/send-pending-tickets', async (req, res) => {
           await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, updated_at = now() WHERE id = $2', 
             [whatsappResult.imageMessageId || whatsappResult.pdfMessageId, booking.id]);
           
-          console.log(`✅ WhatsApp sent for booking ${booking.booking_string_id || booking.id}:`, whatsappResult.pdfMessageId || whatsappResult.imageMessageId);
+          console.log(`вњ… WhatsApp sent for booking ${booking.booking_string_id || booking.id}:`, whatsappResult.pdfMessageId || whatsappResult.imageMessageId);
           
           results.push({
             bookingId: booking.booking_string_id || booking.id,
@@ -4187,7 +3915,7 @@ app.post('/api/send-pending-tickets', async (req, res) => {
             phone: phone
           });
         } else {
-          console.error(`❌ WhatsApp failed for booking ${booking.id}:`, whatsappResult.error);
+          console.error(`вќЊ WhatsApp failed for booking ${booking.id}:`, whatsappResult.error);
           await db.query('UPDATE bookings SET confirmation_error = $1, updated_at = now() WHERE id = $2', 
             [JSON.stringify(whatsappResult.error), booking.id]);
           
@@ -4202,7 +3930,7 @@ app.post('/api/send-pending-tickets', async (req, res) => {
         await new Promise(resolve => setTimeout(resolve, 1000));
         
       } catch (bookingError) {
-        console.error(`❌ Error sending ticket for booking ${booking.id}:`, bookingError);
+        console.error(`вќЊ Error sending ticket for booking ${booking.id}:`, bookingError);
         results.push({
           bookingId: booking.booking_string_id || booking.id,
           success: false,
@@ -4214,7 +3942,7 @@ app.post('/api/send-pending-tickets', async (req, res) => {
     const successCount = results.filter(r => r.success).length;
     const failureCount = results.filter(r => !r.success).length;
     
-    console.log(`✅ Pending tickets sent: ${successCount} successful, ${failureCount} failed`);
+    console.log(`вњ… Pending tickets sent: ${successCount} successful, ${failureCount} failed`);
     
     res.json({
       success: true,
@@ -4226,7 +3954,7 @@ app.post('/api/send-pending-tickets', async (req, res) => {
     });
     
   } catch (error) {
-    console.error('❌ Send pending tickets error:', error);
+    console.error('вќЊ Send pending tickets error:', error);
     res.status(500).json({
       success: false,
       message: 'Send pending tickets failed',
@@ -4237,9 +3965,9 @@ app.post('/api/send-pending-tickets', async (req, res) => {
 
 // Graceful shutdown
 process.on('SIGINT', () => {
-    console.log('\n🛑 Shutting down server gracefully...');
+    console.log('\nрџ›‘ Shutting down server gracefully...');
     server.close(() => {
-        console.log('✅ Server closed');
+        console.log('вњ… Server closed');
         process.exit(0);
     });
 });
