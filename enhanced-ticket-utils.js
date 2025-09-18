@@ -608,6 +608,16 @@ async function sendWhatsAppTicket(phone, ticket) {
         publicPdfUrl: publicPdfUrl
       });
       
+      // Additional debugging for URL construction
+      console.log('🔍 URL Construction Debug:', {
+        'ticket.path': ticket.path,
+        'ticket.pdfPath': ticket.pdfPath,
+        'ticket.ticketId': ticket.ticketId,
+        'baseUrl': baseUrl,
+        'finalUrl': publicPdfUrl,
+        'urlStartsWithHttp': /^https?:\/\//.test(publicPdfUrl)
+      });
+      
       // Verify public URL is accessible (always check for WhatsApp delivery)
       try {
         console.log('🔍 Verifying public PDF URL accessibility...');
@@ -649,6 +659,15 @@ async function sendWhatsAppTicket(phone, ticket) {
         urlFile: pdfPayload.urlFile,
         fileName: pdfPayload.fileName,
         caption: pdfPayload.caption
+      });
+      
+      // Critical: Log the exact URL being sent to GreenAPI
+      console.log('🚨 CRITICAL: URL being sent to GreenAPI:', pdfPayload.urlFile);
+      console.log('🚨 URL validation:', {
+        'startsWithHttp': /^https?:\/\//.test(pdfPayload.urlFile),
+        'isString': typeof pdfPayload.urlFile === 'string',
+        'length': pdfPayload.urlFile?.length,
+        'firstChars': pdfPayload.urlFile?.substring(0, 20)
       });
       
       const pdfResponse = await axios.post(
