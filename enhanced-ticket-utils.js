@@ -281,11 +281,13 @@ async function generateTicketForBooking(booking) {
   // In Railway: /app/tickets, In local dev: D:\admin-script\tickets
   const ticketsDir = process.env.NODE_ENV === 'production' 
     ? '/app/tickets' 
-    : path.join(__dirname, '..', 'tickets');
+    : path.resolve(__dirname, '..', 'tickets');
   const pdfFilepath = path.join(ticketsDir, pdfFilename);
   
   console.log('📁 Tickets directory:', ticketsDir);
   console.log('📄 PDF file path:', pdfFilepath);
+  console.log('🔍 NODE_ENV:', process.env.NODE_ENV);
+  console.log('🔍 __dirname:', __dirname);
 
   // Ensure tickets directory exists
   if (!fs.existsSync(ticketsDir)) {
