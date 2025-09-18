@@ -569,21 +569,43 @@ async function sendWhatsAppTicket(phone, ticket) {
       console.log('📁 Local PDF path:', ticket.localPath);
       console.log('✅ PDF file exists locally:', ticket.localPath ? fs.existsSync(ticket.localPath) : 'No local path');
       
-      // Verify public URL is accessible (only in production)
-      if (process.env.NODE_ENV === 'production') {
-        try {
-          console.log('🔍 Verifying public PDF URL accessibility...');
-          const response = await axios.head(publicPdfUrl, { timeout: 10000 });
-          console.log('✅ Public PDF URL is accessible:', response.status);
-        } catch (error) {
-          console.error('❌ Public PDF URL is not accessible:', error.message);
-          return {
-            success: false,
-            error: 'Public PDF URL not accessible',
-            provider: 'Green API',
-            details: `URL not accessible: ${publicPdfUrl} - ${error.message}`
-          };
+      // Verify public URL is accessible (always check for WhatsApp delivery)
+      try {
+        console.log('🔍 Verifying public PDF URL accessibility...');
+        console.log('🌐 Testing URL:', publicPdfUrl);
+        
+        const response = await axios.head(publicPdfUrl, { 
+          timeout: 15000,
+          headers: {
+            'User-Agent': 'Mozilla/5.0 (compatible; GreenAPI/1.0)',
+            'Accept': 'application/pdf, */*'
+          }
+        });
+        
+        console.log('✅ Public PDF URL is accessible:', response.status);
+        console.log('📄 Content-Type:', response.headers['content-type']);
+        console.log('📊 Content-Length:', response.headers['content-length']);
+        
+        // Verify it's actually a PDF
+        if (!response.headers['content-type']?.includes('application/pdf')) {
+          throw new Error(`Invalid content type: ${response.headers['content-type']}`);
         }
+        
+      } catch (error) {
+        console.error('❌ Public PDF URL is not accessible:', error.message);
+        console.error('🔍 URL details:', {
+          url: publicPdfUrl,
+          status: error.response?.status,
+          headers: error.response?.headers
+        });
+        
+        return {
+          success: false,
+          error: 'Public PDF URL not accessible',
+          provider: 'Green API',
+          details: `URL not accessible: ${publicPdfUrl} - ${error.message}`,
+          statusCode: error.response?.status
+        };
       }
       
       const pdfPayload = {
@@ -593,13 +615,28 @@ async function sendWhatsAppTicket(phone, ticket) {
         caption: '🎫 Ваш билет (PDF документ)'
       };
       
+      console.log('📤 Sending PDF via Green API sendFileByUrl...');
+      console.log('📋 PDF payload:', {
+        chatId: pdfPayload.chatId,
+        urlFile: pdfPayload.urlFile,
+        fileName: pdfPayload.fileName,
+        caption: pdfPayload.caption
+      });
+      
       const pdfResponse = await axios.post(
         `${GREEN_API_URL}/waInstance${ID_INSTANCE}/sendFileByUrl/${TOKEN}`,
         pdfPayload,
-        { timeout: 15000 }
+        { timeout: 30000 } // Increased timeout for file upload
       );
       
       console.log('✅ PDF sent successfully:', pdfResponse.data);
+      console.log('📱 Green API response status:', pdfResponse.status);
+      console.log('📱 Green API response headers:', pdfResponse.headers);
+      
+      // Verify the response indicates success
+      if (!pdfResponse.data?.idMessage) {
+        throw new Error('Green API did not return message ID for PDF');
+      }
       
       return {
         success: true,
@@ -630,7 +667,7 @@ async function sendWhatsAppTicket(phone, ticket) {
 
 // Test function for PDF delivery workflow
 async function testPDFDelivery(phone = '+996555123456') {
-  console.log('🧪 Starting PDF delivery test...');
+  console.log('🧪 Starting comprehensive PDF delivery test...');
   
   try {
     // 1. Generate test ticket
@@ -659,14 +696,41 @@ async function testPDFDelivery(phone = '+996555123456') {
     const publicUrl = `${baseUrl}${ticket.path}`;
     console.log('🌐 Public URL:', publicUrl);
     
-    // 4. Test public URL accessibility
+    // 4. Test public URL accessibility with detailed checks
+    console.log('🔍 Testing public URL accessibility...');
     try {
-      console.log('🔍 Testing public URL accessibility...');
-      const response = await axios.head(publicUrl, { timeout: 10000 });
+      const response = await axios.head(publicUrl, { 
+        timeout: 15000,
+        headers: {
+          'User-Agent': 'Mozilla/5.0 (compatible; GreenAPI/1.0)',
+          'Accept': 'application/pdf, */*'
+        }
+      });
+      
       console.log('✅ Public URL accessible:', response.status);
       console.log('📄 Content-Type:', response.headers['content-type']);
+      console.log('📊 Content-Length:', response.headers['content-length']);
+      console.log('🔒 HTTPS:', publicUrl.startsWith('https://'));
+      
+      // Verify it's actually a PDF
+      if (!response.headers['content-type']?.includes('application/pdf')) {
+        throw new Error(`Invalid content type: ${response.headers['content-type']}`);
+      }
+      
     } catch (error) {
-      console.warn('⚠️ Public URL not accessible (expected in local dev):', error.message);
+      console.error('❌ Public URL not accessible:', error.message);
+      console.error('🔍 Error details:', {
+        status: error.response?.status,
+        headers: error.response?.headers,
+        url: publicUrl
+      });
+      
+      // Don't fail the test in local development
+      if (process.env.NODE_ENV !== 'production') {
+        console.warn('⚠️ Continuing test despite URL accessibility issue (local dev)');
+      } else {
+        throw error;
+      }
     }
     
     // 5. Test WhatsApp sending
@@ -678,14 +742,53 @@ async function testPDFDelivery(phone = '+996555123456') {
       success: true,
       ticket,
       publicUrl,
-      whatsappResult: result
+      whatsappResult: result,
+      urlAccessible: true
     };
     
   } catch (error) {
     console.error('❌ PDF delivery test failed:', error);
     return {
       success: false,
-      error: error.message
+      error: error.message,
+      stack: error.stack
+    };
+  }
+}
+
+// Function to test external URL accessibility
+async function testExternalURL(url) {
+  console.log('🌐 Testing external URL accessibility...');
+  console.log('🔗 URL:', url);
+  
+  try {
+    const response = await axios.get(url, { 
+      timeout: 15000,
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (compatible; GreenAPI/1.0)',
+        'Accept': 'application/pdf, */*'
+      }
+    });
+    
+    console.log('✅ External URL accessible:', response.status);
+    console.log('📄 Content-Type:', response.headers['content-type']);
+    console.log('📊 Content-Length:', response.headers['content-length']);
+    console.log('🔒 HTTPS:', url.startsWith('https://'));
+    
+    return {
+      accessible: true,
+      status: response.status,
+      contentType: response.headers['content-type'],
+      contentLength: response.headers['content-length'],
+      isHttps: url.startsWith('https://')
+    };
+    
+  } catch (error) {
+    console.error('❌ External URL not accessible:', error.message);
+    return {
+      accessible: false,
+      error: error.message,
+      status: error.response?.status
     };
   }
 }
@@ -696,5 +799,6 @@ module.exports = {
   uploadFileToSupabase,
   sendWhatsAppTicket,
   createBasicTemplate,
-  testPDFDelivery
+  testPDFDelivery,
+  testExternalURL
 };

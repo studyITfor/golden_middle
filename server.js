@@ -157,8 +157,11 @@ app.use('/tickets', express.static(TICKETS_PATH, {
   setHeaders: (res, path) => {
     if (path.endsWith('.pdf')) {
       res.type('application/pdf');
-      res.set('Content-Disposition', 'inline');
+      res.set('Content-Disposition', 'attachment; filename=' + path.split('/').pop());
       res.set('Cache-Control', 'public, max-age=3600');
+      res.set('Access-Control-Allow-Origin', '*');
+      res.set('Access-Control-Allow-Methods', 'GET, HEAD, OPTIONS');
+      res.set('Access-Control-Allow-Headers', 'Content-Type');
     }
   }
 }));
