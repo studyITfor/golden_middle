@@ -2888,6 +2888,7 @@ Status: ${booking.status}
         console.log('Viewing ticket details for:', ticketId);
         // Implementation for detailed ticket view
     }
+}
 
 // Initialize admin panel
 let adminPanel;
