@@ -290,6 +290,9 @@ async function generateTicketForBooking(booking) {
   console.log('🔍 __dirname:', __dirname);
   console.log('🔍 Final resolved ticketsDir:', path.resolve(ticketsDir));
   console.log('🔍 Final resolved pdfFilepath:', path.resolve(pdfFilepath));
+  console.log('🔍 RAILWAY_PUBLIC_DOMAIN:', process.env.RAILWAY_PUBLIC_DOMAIN);
+  console.log('🔍 SUPABASE_URL:', process.env.SUPABASE_URL ? 'SET' : 'NOT SET');
+  console.log('🔍 SUPABASE_KEY:', process.env.SUPABASE_KEY ? 'SET' : 'NOT SET');
 
   // Ensure tickets directory exists
   try {
@@ -345,7 +348,7 @@ async function generateTicketForBooking(booking) {
     
     return {
       ticketId,
-      path: `/tickets/${pdfFilename}`,
+      path: `/tickets/${pdfFilename}`, // This is the public URL path, not the file system path
       localPath: pdfFilepath,
       isTemp: false
     };
@@ -479,7 +482,12 @@ async function createBasicTemplate(templatePath) {
 // Fallback text ticket generation
 function generateTextTicket(booking, ticketId) {
   const txtFilename = `${ticketId}.txt`;
-  const txtFilepath = path.join(__dirname, '..', 'tickets', txtFilename);
+  
+  // Use correct path for Railway environment
+  const ticketsDir = process.env.NODE_ENV === 'production' 
+    ? '/app/tickets' 
+    : path.resolve(__dirname, '..', 'tickets');
+  const txtFilepath = path.join(ticketsDir, txtFilename);
   const contentLines = [
     `🎫 TICKET CONFIRMED 🎫`,
     ``,
@@ -499,15 +507,23 @@ function generateTextTicket(booking, ticketId) {
   ];
   
   // Ensure tickets directory exists
-  const ticketsDir = path.dirname(txtFilepath);
-  if (!fs.existsSync(ticketsDir)) {
-    fs.mkdirSync(ticketsDir, { recursive: true });
+  try {
+    if (!fs.existsSync(ticketsDir)) {
+      console.log('📁 Creating tickets directory for text ticket:', ticketsDir);
+      fs.mkdirSync(ticketsDir, { recursive: true });
+      console.log('✅ Tickets directory created successfully');
+    } else {
+      console.log('✅ Tickets directory already exists:', ticketsDir);
+    }
+  } catch (error) {
+    console.error('❌ Failed to create tickets directory:', error);
+    throw new Error(`Cannot create tickets directory: ${error.message}`);
   }
   
   fs.writeFileSync(txtFilepath, contentLines.join('\n'), 'utf8');
   return { 
     ticketId, 
-    path: `/tickets/${txtFilename}`, 
+    path: `/tickets/${txtFilename}`, // This is the public URL path, not the file system path
     localPath: txtFilepath, 
     isTemp: false
   };
