@@ -588,6 +588,13 @@ async function sendWhatsAppTicket(phone, ticket) {
       console.log('🌐 Public PDF URL (direct endpoint):', publicPdfUrl);
       console.log('📁 Local PDF path:', ticket.localPath);
       console.log('✅ PDF file exists locally:', ticket.localPath ? fs.existsSync(ticket.localPath) : 'No local path');
+      console.log('🔍 Debug ticket object:', {
+        path: ticket.path,
+        ticketId: ticket.ticketId,
+        filename: filename,
+        baseUrl: baseUrl,
+        publicPdfUrl: publicPdfUrl
+      });
       
       // Verify public URL is accessible (always check for WhatsApp delivery)
       try {
