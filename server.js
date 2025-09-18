@@ -200,6 +200,44 @@ app.get('/debug/tickets', (req, res) => {
   }
 });
 
+// Debug endpoint to check template files
+app.get('/debug/templates', (req, res) => {
+  try {
+    const baseDir = process.env.NODE_ENV === 'production' ? '/app' : __dirname;
+    const templateFiles = [
+      'ticket_design.png',
+      'ticket_design.pdf', 
+      'example.pdf',
+      'example.png',
+      'ticket_template.pdf'
+    ];
+    
+    const templateStatus = {};
+    templateFiles.forEach(file => {
+      const filePath = path.join(baseDir, file);
+      templateStatus[file] = {
+        exists: fs.existsSync(filePath),
+        path: filePath,
+        size: fs.existsSync(filePath) ? fs.statSync(filePath).size : 0
+      };
+    });
+    
+    res.json({
+      success: true,
+      baseDir: baseDir,
+      environment: process.env.NODE_ENV,
+      templates: templateStatus,
+      workingDir: process.cwd(),
+      __dirname: __dirname
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Debug endpoint to test PDF generation
 app.get('/debug/test-pdf-generation', async (req, res) => {
   try {
