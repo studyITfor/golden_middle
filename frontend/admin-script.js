@@ -621,6 +621,7 @@ class AdminPanel {
     }
 
     async handleLogin() {
+        console.log('[DEBUG] handleLogin called');
         const password = document.getElementById('adminPassword').value;
         const errorDiv = document.getElementById('loginError');
         const submitBtn = document.querySelector('#loginForm button[type="submit"]');
@@ -2968,6 +2969,7 @@ Status: ${booking.status}
         console.log('Viewing ticket details for:', ticketId);
         // Implementation for detailed ticket view
     }
+}
 
 // Initialize admin panel
 let adminPanel;
