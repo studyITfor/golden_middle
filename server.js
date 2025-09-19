@@ -31,6 +31,23 @@ if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
 const app = express();
 const server = createServer(app);
 
+// === CONFIG: TICKETS PATH ===
+const TICKETS_PATH =
+  process.env.NODE_ENV === "production"
+    ? "/app/tickets"
+    : path.join(__dirname, "tickets");
+
+if (!fs.existsSync(TICKETS_PATH)) {
+  fs.mkdirSync(TICKETS_PATH, { recursive: true });
+  console.log("Created tickets directory at:", TICKETS_PATH);
+} else {
+  console.log("Tickets directory exists at:", TICKETS_PATH);
+}
+
+// === STATIC FILES ===
+// serve tickets first
+app.use("/tickets", express.static(TICKETS_PATH));
+
 // Configure Socket.IO with proper CORS for localhost testing
 const io = new Server(server, {
     cors: {
@@ -338,50 +355,7 @@ app.get('/debug/templates', (req, res) => {
   res.json(files);
 });
 
-// === TICKETS STATIC (canonical) - MUST be before catch-all static middleware ===
-// Use correct path for Railway environment
-const TICKETS_PATH = process.env.NODE_ENV === 'production'
-  ? '/app/tickets'
-  : path.resolve(__dirname, 'tickets');
-
-// create tickets dir if missing at runtime (safe)
-try {
-  if (!fs.existsSync(TICKETS_PATH)) {
-    fs.mkdirSync(TICKETS_PATH, { recursive: true });
-    console.log('Created tickets directory:', TICKETS_PATH);
-  }
-} catch (err) {
-  console.error('Failed to ensure tickets directory exists:', err.message);
-}
-
-// Serve tickets with PDF headers
-console.log('📁 Setting up static file serving for tickets at:', TICKETS_PATH);
-console.log('📁 TICKETS_PATH exists:', fs.existsSync(TICKETS_PATH));
-if (fs.existsSync(TICKETS_PATH)) {
-  const files = fs.readdirSync(TICKETS_PATH);
-  console.log('📁 Files in TICKETS_PATH:', files);
-}
-
-app.use('/tickets', express.static(TICKETS_PATH, {
-  setHeaders: (res, filePath) => {
-    console.log('📁 Serving file:', filePath);
-    if (filePath.endsWith('.pdf')) {
-      res.type('application/pdf');
-      res.setHeader('Content-Disposition', 'inline');
-      res.setHeader('Cache-Control', 'public, max-age=3600');
-    }
-  }
-}));
-
-// Fallback PDF route in case static serving fails
-app.get('/pdf/:name', (req, res) => {
-  const safe = path.basename(req.params.name);
-  const p = path.join(TICKETS_PATH, safe);
-  if (fs.existsSync(p)) return res.sendFile(p);
-  res.status(404).send('Not found');
-});
-console.log('📁 Tickets path:', TICKETS_PATH);
-console.log('📁 Tickets exists:', fs.existsSync(TICKETS_PATH));
+// === TICKETS STATIC (canonical) - MOVED TO TOP OF FILE ===
 
 app.use(express.static(FRONTEND_PATH));
 
@@ -790,6 +764,31 @@ app.delete('/api/delete-booking/:bookingId', async (req, res) => {
             timestamp: new Date().toISOString()
         });
     }
+});
+
+// Debug env
+app.get("/debug/env", (req, res) => {
+  res.json({
+    NODE_ENV: process.env.NODE_ENV,
+    TICKETS_PATH,
+    templatePath: path.join(__dirname, "ticket_design.png"),
+    templateExists: fs.existsSync(path.join(__dirname, "ticket_design.png")),
+  });
+});
+
+// Debug ticket files
+app.get("/debug/list-tickets", (req, res) => {
+  try {
+    const files = fs.readdirSync(TICKETS_PATH);
+    res.json({ success: true, files });
+  } catch (err) {
+    res.json({ success: false, error: err.message });
+  }
+});
+
+// Health check
+app.get("/health", (req, res) => {
+  res.json({ status: "ok", uptime: process.uptime() });
 });
 
 // Database migration endpoint
