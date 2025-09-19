@@ -740,9 +740,8 @@ async function testPDFDelivery(phone = '+996555123456') {
     console.log(`📊 File size: ${(stats.size / 1024).toFixed(2)} KB`);
     
     // 3. Test local URL access using direct endpoint
-    const baseUrl = process.env.RAILWAY_PUBLIC_DOMAIN || 'https://upbeat-compassion-production.up.railway.app';
     const filename = ticket.path.split('/').pop();
-    const publicUrl = `${baseUrl}/pdf/${filename}`;
+    const publicUrl = buildPublicPdfUrl(ticket);
     console.log('🌐 Public URL (direct endpoint):', publicUrl);
     
     // 4. Test public URL accessibility with detailed checks

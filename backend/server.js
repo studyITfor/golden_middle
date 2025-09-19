@@ -16,6 +16,28 @@ const SecureTicketSystem = require('./secure-ticket-system');
 const db = require('./database');
 const { uploadTicketToStorage } = require('./storage-utils');
 
+// Canonical URL builder helper
+function buildPublicPdfUrl(ticket) {
+  // Guarantee a valid https base
+  let base = process.env.RAILWAY_PUBLIC_DOMAIN || process.env.PUBLIC_BASE_URL || process.env.PUBLIC_URL || 'https://goldenmiddle.up.railway.app';
+  base = base.replace(/\/+$/, ''); // drop trailing slash
+
+  // ticket.path might be '/tickets/ID.pdf' or 'tickets/ID.pdf'
+  let rel = ticket.path || ticket.pdfPath || `/tickets/${ticket.ticketId}.pdf`;
+  if (!rel.startsWith('/')) rel = '/' + rel;
+
+  const url = `${base}${rel}`;
+
+  // defensive check:
+  if (!/^https?:\/\//i.test(url)) {
+    // Always log full details and throw in dev; in prod just warn and return url with https forced
+    console.warn('buildPublicPdfUrl: constructed URL missing scheme — forcing https: ', { base, rel, url });
+    return 'https://' + url.replace(/^\/+/, '');
+  }
+
+  return url;
+}
+
 const app = express();
 const server = createServer(app);
 
@@ -2055,8 +2077,7 @@ app.post('/api/confirm-payment', async (req, res) => {
         console.log('📱 Sending WhatsApp ticket to:', phone, 'ticket:', ticket?.ticketId);
         
         // Use public URL for Green API - ensure it's a valid URL
-        const baseUrl = process.env.PUBLIC_BASE_URL || 'https://upbeat-compassion-production.up.railway.app';
-        const pdfUrl = publicPdfUrl || (ticket && ticket.localPath ? `${baseUrl}${ticket.path}` : null);
+        const pdfUrl = publicPdfUrl || (ticket ? buildPublicPdfUrl(ticket) : null);
         
         console.log('🔗 Ticket URL for WhatsApp:', { 
           pdfUrl, 
@@ -3519,18 +3540,18 @@ app.post('/api/bulk-confirm-payments', async (req, res) => {
           } catch (uploadError) {
             console.warn(`⚠️ Upload failed for booking ${booking.id}, using local URLs:`, uploadError.message);
             // Fallback to local URLs
-            const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
-            publicPdfUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}`;
-            publicImageUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.imageLocalPath)}`;
+            const tempTicket = { path: `/temp-tickets/${path.basename(ticket.localPath)}` };
+            const tempImage = { path: `/temp-tickets/${path.basename(ticket.imageLocalPath)}` };
+            publicPdfUrl = buildPublicPdfUrl(tempTicket);
+            publicImageUrl = buildPublicPdfUrl(tempImage);
           }
         }
         
         // Send WhatsApp
         const phone = booking.user_phone;
         if (phone && /^\+\d{10,15}$/.test(phone)) {
-          const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
-          const pdfUrl = publicPdfUrl || (ticket.localPath ? `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}` : null);
-          const imageUrl = publicImageUrl || (ticket.imageLocalPath ? `${baseUrl}/temp-tickets/${path.basename(ticket.imageLocalPath)}` : null);
+          const pdfUrl = publicPdfUrl || (ticket.localPath ? buildPublicPdfUrl({ path: `/temp-tickets/${path.basename(ticket.localPath)}` }) : null);
+          const imageUrl = publicImageUrl || (ticket.imageLocalPath ? buildPublicPdfUrl({ path: `/temp-tickets/${path.basename(ticket.imageLocalPath)}` }) : null);
           
           const ticketForWhatsApp = {
             ticketId: ticket.ticketId,
@@ -3695,9 +3716,8 @@ app.post('/api/send-pending-tickets', async (req, res) => {
               } catch (uploadError) {
                 console.warn(`⚠️ Upload failed for booking ${booking.id}, using local URLs:`, uploadError.message);
                 // Fallback to local URLs
-                const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
-                pdfUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}`;
-                imageUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.imageLocalPath)}`;
+                pdfUrl = buildPublicPdfUrl({ path: `/temp-tickets/${path.basename(ticket.localPath)}` });
+                imageUrl = buildPublicPdfUrl({ path: `/temp-tickets/${path.basename(ticket.imageLocalPath)}` });
               }
             }
           }
