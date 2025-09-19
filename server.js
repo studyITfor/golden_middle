@@ -312,6 +312,32 @@ app.get('/debug/database-schema', async (req, res) => {
   }
 });
 
+// Simple health check endpoint
+app.get('/__health__', (req, res) => res.send('ok:' + new Date().toISOString()));
+
+// Enhanced debug endpoint for tickets
+app.get('/debug/list-tickets', (req, res) => {
+  try {
+    const files = fs.readdirSync(TICKETS_PATH).map(f => {
+      const p = path.join(TICKETS_PATH, f);
+      const st = fs.statSync(p);
+      return { name: f, size: st.size, mtime: st.mtime };
+    });
+    return res.json({ TICKETS_PATH, files });
+  } catch (e) {
+    return res.status(500).json({ error: e.message, stack: e.stack });
+  }
+});
+
+// Debug endpoint to check template files
+app.get('/debug/templates', (req, res) => {
+  const files = ['ticket_design.png', 'ticket_design.pdf', 'example.pdf'].map(name => {
+    const p = path.resolve(__dirname, name);
+    return { name, exists: fs.existsSync(p), path: p };
+  });
+  res.json(files);
+});
+
 // === TICKETS STATIC (canonical) - MUST be before catch-all static middleware ===
 // Use correct path for Railway environment
 const TICKETS_PATH = process.env.NODE_ENV === 'production'
@@ -346,6 +372,14 @@ app.use('/tickets', express.static(TICKETS_PATH, {
     }
   }
 }));
+
+// Fallback PDF route in case static serving fails
+app.get('/pdf/:name', (req, res) => {
+  const safe = path.basename(req.params.name);
+  const p = path.join(TICKETS_PATH, safe);
+  if (fs.existsSync(p)) return res.sendFile(p);
+  res.status(404).send('Not found');
+});
 console.log('📁 Tickets path:', TICKETS_PATH);
 console.log('📁 Tickets exists:', fs.existsSync(TICKETS_PATH));
 
