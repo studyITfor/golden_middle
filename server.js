@@ -183,11 +183,13 @@ app.get('/debug/tickets', (req, res) => {
 // Debug endpoint to list files in tickets directory
 app.get('/debug/list-tickets', (req, res) => {
   try {
-    const files = fs.existsSync(TICKETS_PATH) ? fs.readdirSync(TICKETS_PATH).map(f => {
-      const st = fs.statSync(path.join(TICKETS_PATH, f));
+    // Use local tickets directory for debug since TICKETS_PATH is defined later
+    const ticketsDir = path.resolve(__dirname, 'tickets');
+    const files = fs.existsSync(ticketsDir) ? fs.readdirSync(ticketsDir).map(f => {
+      const st = fs.statSync(path.join(ticketsDir, f));
       return { name: f, size: st.size, mtime: st.mtime };
     }) : [];
-    res.json({ ticketsPath: TICKETS_PATH, exists: fs.existsSync(TICKETS_PATH), files });
+    res.json({ ticketsPath: ticketsDir, exists: fs.existsSync(ticketsDir), files });
   } catch (e) { 
     res.status(500).json({ error: e.message, stack: e.stack }); 
   }
@@ -195,12 +197,12 @@ app.get('/debug/list-tickets', (req, res) => {
 
 // Debug endpoint to check environment variables
 app.get('/debug/env', (req, res) => {
-  console.log('рџ”Ќ Debug /debug/env endpoint called');
+  console.log('🔍 Debug /debug/env endpoint called');
   res.json({
     RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || null,
     NODE_ENV: process.env.NODE_ENV || null,
     PORT: process.env.PORT || null,
-    TICKETS_PATH: TICKETS_PATH,
+    TICKETS_PATH: process.env.NODE_ENV === 'production' ? '/app/tickets' : path.resolve(__dirname, 'tickets'),
     __dirname: __dirname,
     timestamp: new Date().toISOString()
   });
@@ -209,9 +211,10 @@ app.get('/debug/env', (req, res) => {
 // Debug endpoint to get the last created ticket
 app.get('/debug/last-ticket', (req, res) => {
   try {
-    if (!fs.existsSync(TICKETS_PATH)) return res.json({ exists: false, files: [] });
-    const files = fs.readdirSync(TICKETS_PATH).map(f => ({
-      name: f, mtime: fs.statSync(path.join(TICKETS_PATH, f)).mtime
+    const ticketsDir = path.resolve(__dirname, 'tickets');
+    if (!fs.existsSync(ticketsDir)) return res.json({ exists: false, files: [] });
+    const files = fs.readdirSync(ticketsDir).map(f => ({
+      name: f, mtime: fs.statSync(path.join(ticketsDir, f)).mtime
     })).sort((a,b) => b.mtime - a.mtime);
     res.json({ last: files[0] || null });
   } catch (e) { 
@@ -309,17 +312,7 @@ app.get('/debug/database-schema', async (req, res) => {
   }
 });
 
-app.use(express.static(FRONTEND_PATH));
-
-// Serve public assets (images, JS libraries)
-const PUBLIC_PATH = path.join(__dirname, 'public');
-app.use('/images', express.static(path.join(PUBLIC_PATH, 'images')));
-app.use('/js', express.static(path.join(PUBLIC_PATH, 'js')));
-
-// Test static file serving with a simple route
-app.use('/test-static', express.static(path.join(__dirname, 'tickets')));
-
-// === TICKETS STATIC (canonical) ===
+// === TICKETS STATIC (canonical) - MUST be before catch-all static middleware ===
 // Use correct path for Railway environment
 const TICKETS_PATH = process.env.NODE_ENV === 'production'
   ? '/app/tickets'
@@ -336,16 +329,16 @@ try {
 }
 
 // Serve tickets with PDF headers
-console.log('рџ“Ѓ Setting up static file serving for tickets at:', TICKETS_PATH);
-console.log('рџ“Ѓ TICKETS_PATH exists:', fs.existsSync(TICKETS_PATH));
+console.log('📁 Setting up static file serving for tickets at:', TICKETS_PATH);
+console.log('📁 TICKETS_PATH exists:', fs.existsSync(TICKETS_PATH));
 if (fs.existsSync(TICKETS_PATH)) {
   const files = fs.readdirSync(TICKETS_PATH);
-  console.log('рџ“Ѓ Files in TICKETS_PATH:', files);
+  console.log('📁 Files in TICKETS_PATH:', files);
 }
 
 app.use('/tickets', express.static(TICKETS_PATH, {
   setHeaders: (res, filePath) => {
-    console.log('рџ“Ѓ Serving file:', filePath);
+    console.log('📁 Serving file:', filePath);
     if (filePath.endsWith('.pdf')) {
       res.type('application/pdf');
       res.setHeader('Content-Disposition', 'inline');
@@ -353,8 +346,20 @@ app.use('/tickets', express.static(TICKETS_PATH, {
     }
   }
 }));
-console.log('рџ“Ѓ Tickets path:', TICKETS_PATH);
-console.log('рџ“Ѓ Tickets exists:', fs.existsSync(TICKETS_PATH));
+console.log('📁 Tickets path:', TICKETS_PATH);
+console.log('📁 Tickets exists:', fs.existsSync(TICKETS_PATH));
+
+app.use(express.static(FRONTEND_PATH));
+
+// Serve public assets (images, JS libraries)
+const PUBLIC_PATH = path.join(__dirname, 'public');
+app.use('/images', express.static(path.join(PUBLIC_PATH, 'images')));
+app.use('/js', express.static(path.join(PUBLIC_PATH, 'js')));
+
+// Test static file serving with a simple route
+app.use('/test-static', express.static(path.join(__dirname, 'tickets')));
+
+// === TICKETS STATIC (canonical) - MOVED TO BEFORE CATCH-ALL STATIC MIDDLEWARE ===
 
 // Serve tickets directory statically - REMOVED: duplicate route that was overriding the correct one above
 
