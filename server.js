@@ -50,6 +50,19 @@ if (process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_PROJECT_ID) {
   }
 }
 
+// Define TICKETS_PATH and ensure directory exists
+const TICKETS_PATH = path.resolve(__dirname, 'tickets'); // /app/tickets in Railway
+console.log('TICKETS_PATH =', TICKETS_PATH);
+if (!fs.existsSync(TICKETS_PATH)) {
+  try { 
+    fs.mkdirSync(TICKETS_PATH, { recursive: true }); 
+    console.log('Created TICKETS_PATH'); 
+  } 
+  catch(e) { 
+    console.error('Failed to create TICKETS_PATH:', e); 
+  }
+}
+
 const app = express();
 const server = createServer(app);
 
@@ -189,7 +202,6 @@ app.use('/js', express.static(path.join(PUBLIC_PATH, 'js')));
 app.use('/test-static', express.static(path.join(__dirname, 'tickets')));
 
 // Serve tickets folder publicly for WhatsApp PDF delivery
-const TICKETS_PATH = path.join(__dirname, 'tickets');
 app.use('/tickets', express.static(TICKETS_PATH, { 
   setHeaders: (res, path) => {
     if (path.endsWith('.pdf')) {
@@ -508,8 +520,7 @@ app.use(express.static(path.join(__dirname, '..', 'public')));
 // Serve js files specifically
 app.use('/js', express.static(path.join(__dirname, '..', 'public', 'js')));
 
-// Serve tickets directory statically
-app.use('/tickets', express.static(path.join(__dirname, '..', 'tickets')));
+// Serve tickets directory statically (duplicate removed - using canonical TICKETS_PATH above)
 
 // Serve temporary ticket files
 app.use('/temp-tickets', express.static(os.tmpdir()));
@@ -531,6 +542,25 @@ app.get('/api/health/readiness', async (req, res) => {
     } catch (err) {
         return res.status(500).json({ status: 'not ready', db: false, error: err.message });
     }
+});
+
+// Debug endpoints (temporary, for prod)
+app.get('/debug/env', (req, res) => {
+  res.json({
+    NODE_ENV: process.env.NODE_ENV || null,
+    RAILWAY_PUBLIC_DOMAIN: process.env.RAILWAY_PUBLIC_DOMAIN || null,
+    PORT: process.env.PORT || null,
+    TICKETS_PATH
+  });
+});
+
+app.get('/debug/list-tickets', (req, res) => {
+  try {
+    const files = fs.existsSync(TICKETS_PATH) ? fs.readdirSync(TICKETS_PATH) : [];
+    res.json({ path: TICKETS_PATH, files });
+  } catch(e) {
+    res.status(500).json({ error: String(e) });
+  }
 });
 
 // Green API health check

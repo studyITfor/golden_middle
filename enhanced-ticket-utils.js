@@ -292,6 +292,13 @@ async function generateTicketForBooking(booking) {
     fs.mkdirSync(ticketsDir, { recursive: true });
   }
 
+  // Log PDF generation attempt with template verification
+  console.log('PDF generation attempt:', { 
+    templatePath, 
+    outPath: pdfFilepath, 
+    existsTemplate: fs.existsSync(templatePath) 
+  });
+
   // Try to find template files (prioritize ticket_design.png)
   // Use correct base directory for Railway vs local development
   const baseDir = process.env.NODE_ENV === 'production' ? '/app' : __dirname;
