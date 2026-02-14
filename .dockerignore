@@ -79,6 +79,7 @@ dist
 .cache/
 public/*
 !public/images/
+!public/js/
 
 # Storybook build outputs
 .out
@@ -133,4 +134,10 @@ static-site/
 test-*
 *test*
 scripts/
+
+# Include template files and fonts for PDF generation
+!ticket_design.png
+!ticket_design.pdf
+!ticket_template.pdf
+!fonts/
 

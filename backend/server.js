@@ -6,6 +6,7 @@ const fontkit = require('@pdf-lib/fontkit');
 const QRCode = require('qrcode');
 const fs = require('fs-extra');
 const path = require('path');
+const os = require('os');
 const axios = require('axios');
 const cors = require('cors');
 const { Blob } = require('buffer');
@@ -13,6 +14,7 @@ const { FormData } = require('undici');
 const config = require('./config');
 const SecureTicketSystem = require('./secure-ticket-system');
 const db = require('./database');
+const { uploadTicketToStorage } = require('./storage-utils');
 
 const app = express();
 const server = createServer(app);
@@ -35,25 +37,177 @@ app.set('io', io);
 
 const PORT = process.env.PORT || config.server.port || 3000;
 
+// Green API configuration
+const GREEN_API_BASE = process.env.GREEN_API_BASE || config.whatsapp.apiUrl;
+const ID_INSTANCE = process.env.GREEN_API_ID_INSTANCE || config.whatsapp.id;
+const API_TOKEN = process.env.GREEN_API_TOKEN || config.whatsapp.token;
+
+// Green API retry function
+async function sendWhatsAppWithRetry(phone, ticket, maxRetries = 1) {
+  // Format phone number for Green API (remove + and ensure it's 12 digits)
+  const cleanPhone = phone.replace(/[^\d]/g, '');
+  const chatId = cleanPhone + '@c.us';
+  
+  for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+    try {
+      console.log(`📱 Green API attempt ${attempt}/${maxRetries + 1} for ${phone} (chatId: ${chatId})`);
+      console.log('Green API payload:', { chatId, ticketId: ticket?.ticketId, timestamp: new Date().toISOString() });
+      
+      // First send text message
+      const textMessage = `🎫 *TICKET CONFIRMED* 🎫
+
+*Ticket ID:* ${ticket?.ticketId || 'N/A'}
+*Event:* University Event
+*Date:* ${new Date().toLocaleDateString('ru-RU')}
+*Time:* ${new Date().toLocaleTimeString('ru-RU')}
+
+*Status:* ✅ CONFIRMED & PAID
+
+This ticket is valid for entry to the event.
+Please present this ticket at the entrance.
+
+Thank you for your booking! 🎓`;
+
+      const textResponse = await axios.post(`${GREEN_API_BASE}/waInstance${ID_INSTANCE}/sendMessage/${API_TOKEN}`, {
+        chatId: chatId,
+        message: textMessage
+      }, { timeout: 15000 });
+
+      console.log('Green API response status:', textResponse.status, 'body:', textResponse.data);
+
+      // Then send file if available
+      if (ticket && ticket.path) {
+        console.log('📎 Sending PDF ticket file via Green API sendFileByUrl...');
+        
+        const filePayload = {
+          chatId: chatId,
+          urlFile: ticket.path,
+          fileName: `ticket_${ticket.ticketId}.pdf`,
+          caption: `🎫 Ваш билет подтвержден!\n\nID билета: ${ticket.ticketId}\n\nБилет прикреплен к сообщению. Пожалуйста, сохраните его для входа на мероприятие.`
+        };
+        
+        console.log('📱 Green API file payload:', filePayload);
+        
+        const fileResponse = await axios.post(`${GREEN_API_BASE}/waInstance${ID_INSTANCE}/sendFileByUrl/${API_TOKEN}`, filePayload, { timeout: 15000 });
+        
+        console.log('Green API file response status:', fileResponse.status, 'body:', fileResponse.data);
+        
+        return {
+          success: true,
+          message: 'WhatsApp ticket sent successfully via Green API',
+          provider: 'Green API',
+          textMessageId: textResponse.data?.idMessage,
+          fileMessageId: fileResponse.data?.idMessage
+        };
+      } else {
+        return {
+          success: true,
+          message: 'WhatsApp text sent successfully via Green API',
+          provider: 'Green API',
+          textMessageId: textResponse.data?.idMessage
+        };
+      }
+      
+    } catch (error) {
+      console.error(`❌ Green API attempt ${attempt} failed:`, error.message);
+      console.error('Green API error details:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        message: error.message
+      });
+      
+      if (attempt === maxRetries + 1) {
+        // Final attempt failed
+        return {
+          success: false,
+          error: `Green API failed after ${maxRetries + 1} attempts: ${error.message}`,
+          provider: 'Green API'
+        };
+      }
+      
+      // Wait before retry with exponential backoff
+      const delay = Math.pow(2, attempt - 1) * 1000; // 1s, 2s, 4s
+      console.log(`📱 Retrying in ${delay}ms...`);
+      await new Promise(resolve => setTimeout(resolve, delay));
+    }
+  }
+}
+
 // Middleware
 app.use(cors());
 app.use(express.json());
 
-// Set static folder to repo/frontend
-const FRONTEND_PATH = path.resolve(__dirname, '..', 'frontend');
+// Set static folder to backend/frontend
+const FRONTEND_PATH = path.join(__dirname, 'frontend');
+console.log('📁 Frontend path:', FRONTEND_PATH);
+console.log('📁 Frontend exists:', fs.existsSync(FRONTEND_PATH));
+console.log('📁 Frontend contents:', fs.existsSync(FRONTEND_PATH) ? fs.readdirSync(FRONTEND_PATH) : 'Directory not found');
+
 app.use(express.static(FRONTEND_PATH));
 
-// Explicit HTML routes
+// Serve public assets (images, JS libraries)
+const PUBLIC_PATH = path.join(__dirname, 'public');
+app.use('/images', express.static(path.join(PUBLIC_PATH, 'images')));
+app.use('/js', express.static(path.join(PUBLIC_PATH, 'js')));
+
+// Explicit HTML routes with error handling
 app.get('/', (req, res) => {
-    res.sendFile(path.join(FRONTEND_PATH, 'index.html'));
+    const indexPath = path.join(FRONTEND_PATH, 'index.html');
+    console.log('📄 Serving index.html from:', indexPath);
+    console.log('📄 Index.html exists:', fs.existsSync(indexPath));
+    
+    if (!fs.existsSync(indexPath)) {
+        return res.status(404).send('Index.html not found');
+    }
+    res.sendFile(indexPath);
 });
 
 app.get('/admin.html', (req, res) => {
-    res.sendFile(path.join(FRONTEND_PATH, 'admin.html'));
+    const adminPath = path.join(FRONTEND_PATH, 'admin.html');
+    console.log('📄 Serving admin.html from:', adminPath);
+    console.log('📄 Admin.html exists:', fs.existsSync(adminPath));
+    
+    if (!fs.existsSync(adminPath)) {
+        return res.status(404).send('Admin.html not found');
+    }
+    res.sendFile(adminPath);
 });
 
 // Serve static files from public directory (if exists)
 app.use(express.static(path.join(__dirname, '..', 'public')));
+
+// Serve js files specifically
+app.use('/js', express.static(path.join(__dirname, '..', 'public', 'js')));
+
+// Serve tickets directory statically
+// Use correct path for Railway environment
+const TICKETS_PATH = process.env.NODE_ENV === 'production'
+  ? '/app/tickets'
+  : path.join(__dirname, '..', 'tickets');
+
+// Ensure tickets directory exists
+try {
+  if (!fs.existsSync(TICKETS_PATH)) {
+    fs.mkdirSync(TICKETS_PATH, { recursive: true });
+    console.log('Created tickets directory:', TICKETS_PATH);
+  }
+} catch (err) {
+  console.error('Failed to ensure tickets directory exists:', err.message);
+}
+
+app.use('/tickets', express.static(TICKETS_PATH, {
+  setHeaders: (res, filePath) => {
+    if (filePath.endsWith('.pdf')) {
+      res.type('application/pdf');
+      res.setHeader('Content-Disposition', 'inline');
+      res.setHeader('Cache-Control', 'public, max-age=3600');
+    }
+  }
+}));
+
+// Serve temporary ticket files
+app.use('/temp-tickets', express.static(os.tmpdir()));
 
 // Health check endpoints
 app.get('/api/health', (req, res) => {
@@ -71,6 +225,52 @@ app.get('/api/health/readiness', async (req, res) => {
         return res.status(500).json({ status: 'not ready', db: false });
     } catch (err) {
         return res.status(500).json({ status: 'not ready', db: false, error: err.message });
+    }
+});
+
+// Green API health check
+app.get('/api/health/greenapi', async (req, res) => {
+    try {
+        console.log('🔍 Checking Green API health...');
+        
+        if (!GREEN_API_BASE || !ID_INSTANCE || !API_TOKEN) {
+            return res.status(503).json({ 
+                status: 'not configured', 
+                greenapi: false, 
+                error: 'Green API credentials not configured' 
+            });
+        }
+        
+        // Call Green API getStateInstance
+        const response = await axios.get(`${GREEN_API_BASE}/waInstance${ID_INSTANCE}/getStateInstance/${API_TOKEN}`, {
+            timeout: 10000
+        });
+        
+        console.log('Green API health response:', response.data);
+        
+        if (response.status === 200) {
+            return res.json({ 
+                status: 'ok', 
+                greenapi: true, 
+                state: response.data.stateInstance,
+                timestamp: new Date().toISOString()
+            });
+        } else {
+            return res.status(503).json({ 
+                status: 'error', 
+                greenapi: false, 
+                error: `Green API returned status ${response.status}`,
+                response: response.data
+            });
+        }
+    } catch (error) {
+        console.error('Green API health check error:', error.message);
+        return res.status(503).json({ 
+            status: 'error', 
+            greenapi: false, 
+            error: error.message,
+            details: error.response?.data
+        });
     }
 });
 
@@ -171,8 +371,18 @@ async function initializeApp() {
     }
 }
 
+// Throttle seat updates to avoid Railway rate limits
+let lastSeatUpdate = 0;
+const SEAT_UPDATE_THROTTLE = 2000; // 2 seconds minimum between updates
+
 // Function to emit seat updates to all connected clients
-async function emitSeatUpdate() {
+async function emitSeatUpdate(force = false) {
+    const now = Date.now();
+    if (!force && (now - lastSeatUpdate) < SEAT_UPDATE_THROTTLE) {
+        return; // Skip if too soon
+    }
+    lastSeatUpdate = now;
+    
     try {
         // Get current seat statuses
         const seatStatuses = {};
@@ -203,7 +413,7 @@ async function emitSeatUpdate() {
                 }
                 
                 seatStatuses[seatId] = status;
-                console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.status})`);
+                // Reduced logging for Railway production
             }
         });
         
@@ -223,10 +433,15 @@ async function emitSeatUpdate() {
         };
         
         // Emit seat update to ALL connected clients (both admins and students)
-        console.log('📡 Emitting seatUpdate event to all clients...');
+        // Reduced logging for Railway production
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('📡 Emitting seatUpdate event to all clients...');
+        }
         io.emit('seatUpdate', updateData);
         
-        console.log('📡 Emitting update-seat-status event to all clients...');
+        if (process.env.NODE_ENV !== 'production') {
+            console.log('📡 Emitting update-seat-status event to all clients...');
+        }
         io.emit('update-seat-status', updateData);
         
         // Also emit specifically to admins room for admin-specific updates
@@ -234,26 +449,17 @@ async function emitSeatUpdate() {
         const adminCount = adminsRoom ? adminsRoom.size : 0;
         
         if (adminCount > 0) {
-            console.log(`📡 Emitting admin:seat-update event to ${adminCount} admin clients...`);
+            if (process.env.NODE_ENV !== 'production') {
+                console.log(`📡 Emitting admin:seat-update event to ${adminCount} admin clients...`);
+            }
             io.to('admins').emit('admin:seat-update', {
                 ...updateData,
                 adminNotification: true
             });
         }
         
-        console.log('✅ Seat update events emitted successfully');
-        console.log(`📊 Total connected clients: ${io.engine.clientsCount}`);
-        console.log(`📊 Admin clients in room: ${adminCount}`);
-        console.log(`📊 Event data:`, {
-            success: updateData.success,
-            totalSeats: updateData.totalSeats,
-            statusCounts: updateData.statusCounts,
-            timestamp: new Date(updateData.timestamp).toISOString()
-        });
-        
-        console.log(`📡 Seat update emitted to ${io.engine.clientsCount} connected clients`);
-        console.log(`📊 Total seats: ${Object.keys(seatStatuses).length}`);
-        console.log(`📊 Status distribution:`, statusCounts);
+        // Reduced logging for Railway production
+        console.log(`📡 Seat update emitted to ${io.engine.clientsCount} clients`);
     } catch (error) {
         console.error('Error emitting seat update:', error);
     }
@@ -307,7 +513,7 @@ app.get('/api/test-db', async (req, res) => {
 // Get all bookings for admin panel
 app.get('/api/bookings', async (req, res) => {
     try {
-        console.log('🔍 Admin requesting all bookings...');
+        // Reduced logging for Railway production
         
         const result = await db.query(`
             SELECT b.*, u.phone 
@@ -761,7 +967,7 @@ function emitSeatBulkUpdate() {
                 }
                 
                 seatStatuses[seatId] = status;
-                console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.status})`);
+                // Reduced logging for Railway production
             }
         });
         
@@ -784,10 +990,7 @@ function emitSeatBulkUpdate() {
         // Emit bulk update to all connected clients
         io.emit('seatBulkUpdate', bulkUpdateData);
         
-        console.log(`📡 Bulk seat update emitted to ${io.engine.clientsCount} connected clients`);
-        console.log(`📊 Total seats: ${Object.keys(seatStatuses).length}`);
-        console.log(`📊 Status distribution:`, statusCounts);
-        console.log(`🔄 All seats set to available status`);
+        console.log(`📡 Bulk seat update emitted to ${io.engine.clientsCount} clients`);
     } catch (error) {
         console.error('Error emitting bulk seat update:', error);
     }
@@ -1207,6 +1410,133 @@ async function sendWhatsAppTicket(phone, pdfBytes, ticketId, bookingData) {
 
 // API Routes
 
+// Generate ticket endpoint
+app.post('/api/generate-ticket', async (req, res) => {
+    const { bookingId } = req.body;
+    console.log('🎫 Generate ticket request:', { bookingId, timestamp: new Date().toISOString() });
+
+    if (!bookingId) {
+        return res.status(400).json({ error: 'bookingId is required' });
+    }
+
+    try {
+        // Get booking from database
+        const bookingResult = await db.query('SELECT * FROM bookings WHERE booking_string_id = $1 OR id = $1', [bookingId]);
+        
+        if (bookingResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Booking not found' });
+        }
+
+        const booking = bookingResult.rows[0];
+        console.log('📊 Found booking for ticket generation:', booking);
+
+        // Generate ticket
+        let ticket = null;
+        try {
+            console.log('🎫 Generating ticket for booking:', booking.id);
+            const { generateTicketForBooking } = require('./ticket-utils');
+            ticket = await generateTicketForBooking(booking);
+            console.log('✅ Ticket generated successfully:', ticket);
+        } catch (e) {
+            console.error('❌ Ticket generation error:', e);
+            return res.status(500).json({ error: 'Failed to generate ticket', details: e.message });
+        }
+
+        // Update booking with ticket info
+        if (ticket && ticket.ticketId) {
+            await db.query('UPDATE bookings SET ticket_id = $1, updated_at = now() WHERE id = $2', 
+                [ticket.ticketId, booking.id]);
+        }
+
+        return res.json({
+            success: true,
+            message: 'Ticket generated successfully',
+            ticketId: ticket && ticket.ticketId || null,
+            ticketPath: ticket && ticket.path || null
+        });
+
+    } catch (err) {
+        console.error('Generate ticket error:', err);
+        return res.status(500).json({ error: 'Failed to generate ticket', details: err.message });
+    }
+});
+
+// Resend ticket endpoint
+app.post('/api/resend-ticket', async (req, res) => {
+    const { bookingId } = req.body;
+    console.log('📱 Resend ticket request:', { bookingId, timestamp: new Date().toISOString() });
+
+    if (!bookingId) {
+        return res.status(400).json({ error: 'bookingId is required' });
+    }
+
+    try {
+        // Get booking from database
+        const bookingResult = await db.query('SELECT * FROM bookings WHERE booking_string_id = $1 OR id = $1', [bookingId]);
+        
+        if (bookingResult.rows.length === 0) {
+            return res.status(404).json({ error: 'Booking not found' });
+        }
+
+        const booking = bookingResult.rows[0];
+        console.log('📊 Found booking for ticket resend:', booking);
+
+        // Generate ticket if not exists
+        let ticket = null;
+        if (booking.ticket_id) {
+            // Ticket already exists, use it
+            ticket = { ticketId: booking.ticket_id, path: `/tickets/${booking.ticket_id}.pdf` };
+        } else {
+            // Generate new ticket
+            try {
+                console.log('🎫 Generating new ticket for resend:', booking.id);
+                const { generateTicketForBooking } = require('./ticket-utils');
+                ticket = await generateTicketForBooking(booking);
+                console.log('✅ New ticket generated for resend:', ticket);
+            } catch (e) {
+                console.error('❌ Ticket generation error for resend:', e);
+                return res.status(500).json({ error: 'Failed to generate ticket', details: e.message });
+            }
+        }
+
+        // Send WhatsApp ticket
+        let whatsappResult = null;
+        try {
+            const phoneToSend = booking.user_phone || booking.phone;
+            if (phoneToSend && /^\+\d{10,15}$/.test(phoneToSend)) {
+                console.log('📱 Resending WhatsApp ticket to:', phoneToSend, 'ticket:', ticket?.ticketId);
+                const { sendWhatsAppTicket } = require('./ticket-utils');
+                whatsappResult = await sendWhatsAppTicket(phoneToSend, ticket || { ticketId: null, path: null });
+                
+                if (whatsappResult.success) {
+                    await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, updated_at = now() WHERE id=$2', 
+                        [whatsappResult.textMessageId || whatsappResult.fileMessageId, booking.id]);
+                    console.log('✅ WhatsApp ticket resent successfully:', {
+                        phone: phoneToSend,
+                        provider: whatsappResult.provider,
+                        messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId,
+                        ticketId: ticket?.ticketId
+                    });
+                }
+            }
+        } catch (e) {
+            console.error('❌ WhatsApp resend error:', e);
+        }
+
+        return res.json({
+            success: true,
+            message: 'Ticket resent successfully',
+            ticketId: ticket && ticket.ticketId || null,
+            ticketPath: ticket && ticket.path || null,
+            whatsappSent: whatsappResult && whatsappResult.success || false
+        });
+
+    } catch (err) {
+        console.error('Resend ticket error:', err);
+        return res.status(500).json({ error: 'Failed to resend ticket', details: err.message });
+    }
+});
+
 // Health check endpoint
 app.get('/api/health', (req, res) => {
     try {
@@ -1282,6 +1612,7 @@ app.get('/api/health', (req, res) => {
 app.post('/api/create-booking', async (req, res) => {
     try {
         const bookingData = req.body;
+        console.log('Create booking payload:', req.body);
         
         // Generate unique booking ID
         const bookingId = 'BK' + Date.now().toString(36).toUpperCase();
@@ -1308,6 +1639,11 @@ app.post('/api/create-booking', async (req, res) => {
         if (!bookingData.table || !bookingData.seat) {
             console.log('❌ Missing table or seat fields:', bookingData);
             return res.status(400).json({ error: 'Неверный формат места. Требуются table и seat или seatId.' });
+        }
+        
+        // Validate student name
+        if (!bookingData.studentName) {
+            return res.status(400).json({ error: 'Student name is required.' });
         }
         
         // Validate WhatsApp number (E.164 format)
@@ -1492,6 +1828,126 @@ app.post('/api/resend-ticket', async (req, res) => {
   }
 });
 
+// User payment confirmation endpoint - for "Я оплатил" button
+app.post('/api/user-payment-confirm', async (req, res) => {
+  const { seatId, studentName, phone } = req.body;
+  console.log('💳 User payment confirmation request:', {
+    seatId,
+    studentName,
+    phone,
+    timestamp: new Date().toISOString()
+  });
+
+  if (!seatId || !studentName || !phone) {
+    return res.status(400).json({ error: 'seatId, studentName, and phone are required' });
+  }
+
+  try {
+    // Parse seat information
+    const [table, seat] = seatId.split('-').map(Number);
+    if (!table || !seat) {
+      return res.status(400).json({ error: 'Invalid seat format' });
+    }
+
+    // Check if seat is already booked
+    const existingBookings = await db.query(
+      'SELECT * FROM bookings WHERE seat = $1 AND status IN ($2, $3, $4)',
+      [`${table}-${seat}`, 'paid', 'confirmed', 'prebooked']
+    );
+
+    if (existingBookings.rows.length > 0) {
+      return res.status(409).json({ error: 'Seat is already booked' });
+    }
+
+    // Generate booking ID
+    const bookingId = 'BKM' + Math.random().toString(36).substr(2, 9).toUpperCase();
+
+    // Create or update user
+    await db.query(
+      'INSERT INTO users (phone, role) VALUES ($1, $2) ON CONFLICT (phone) DO NOTHING',
+      [phone, 'user']
+    );
+
+    // Start transaction
+    await db.query('BEGIN');
+
+    // Create booking with 'pending' status (waiting for admin confirmation)
+    const result = await db.query(
+      'INSERT INTO bookings (booking_string_id, user_phone, event_id, seat, table_number, seat_number, first_name, last_name, status) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9) RETURNING *',
+      [bookingId, phone, 1, `${table}-${seat}`, table, seat, studentName.split(' ')[0] || studentName, studentName.split(' ')[1] || '', 'pending']
+    );
+
+    const booking = result.rows[0];
+
+    // Create payment record
+    const paymentData = {
+      transaction_id: `txn_${Date.now()}`,
+      booking_id: bookingId,
+      user_phone: phone,
+      amount: 0,
+      status: 'pending',
+      provider: 'user_confirmed',
+      raw_payload: JSON.stringify(req.body)
+    };
+
+    await db.query(
+      `INSERT INTO payments (transaction_id, booking_id, user_phone, amount, status, provider, raw_payload, created_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,now()) RETURNING id`,
+      [paymentData.transaction_id, paymentData.booking_id, paymentData.user_phone, paymentData.amount, paymentData.status, paymentData.provider, paymentData.raw_payload]
+    );
+
+    await db.query('COMMIT');
+    console.log('✅ User payment transaction committed successfully');
+
+    // Emit real-time updates
+    try {
+      console.log('📡 Emitting user payment confirmation events...');
+      if (io) {
+        // Emit booking created event
+        io.emit('update-seat-status', {
+          type: 'booking-created',
+          data: {
+            bookingId: bookingId,
+            table: table,
+            seat: seat,
+            status: 'pending',
+            firstName: studentName.split(' ')[0] || studentName,
+            lastName: studentName.split(' ')[1] || ''
+          },
+          timestamp: Date.now()
+        });
+
+        // Emit seat status update
+        const seatId = `${table}-${seat}`;
+        io.emit('update-seat-status', {
+          seatId: seatId,
+          status: 'pending',
+          timestamp: Date.now()
+        });
+
+        // Emit booking updated event
+        io.emit('bookingUpdated', booking);
+        
+        console.log('✅ User payment events emitted successfully');
+      }
+    } catch (e) {
+      console.error('❌ Socket emit error', e);
+    }
+
+    return res.json({
+      success: true,
+      message: 'Оплата подтверждена. Ожидайте подтверждения администратора.',
+      bookingId: bookingId,
+      status: 'pending'
+    });
+
+  } catch (err) {
+    try { await db.query('ROLLBACK'); } catch(e) {}
+    console.error('User payment confirmation error:', err);
+    return res.status(500).json({ error: 'Ошибка при подтверждении оплаты', details: err.message });
+  }
+});
+
 // Confirm payment and generate ticket - ROBUST IMPLEMENTATION
 app.post('/api/confirm-payment', async (req, res) => {
   const { bookingId, paymentMethod, amount } = req.body;
@@ -1505,6 +1961,11 @@ app.post('/api/confirm-payment', async (req, res) => {
   if (!bookingId) return res.status(400).json({ error: 'bookingId required' });
 
   try {
+    // First, let's check what bookings exist in the database
+    console.log('🔍 Checking all bookings in database...');
+    const allBookingsRes = await db.query('SELECT id, booking_string_id, first_name, last_name, status FROM bookings ORDER BY created_at DESC LIMIT 10');
+    console.log('🔍 All bookings in database:', allBookingsRes.rows);
+    
     // find booking by string id or numeric id
     const findSql = `SELECT * FROM bookings WHERE booking_string_id=$1 OR id::text = $1 LIMIT 1`;
     const findRes = await db.query(findSql, [bookingId]);
@@ -1512,6 +1973,8 @@ app.post('/api/confirm-payment', async (req, res) => {
     console.log('🔍 Booking lookup result:', {
       found: !!booking,
       bookingId: bookingId,
+      query: findSql,
+      params: [bookingId],
       bookingData: booking ? {
         id: booking.id,
         booking_string_id: booking.booking_string_id,
@@ -1528,6 +1991,11 @@ app.post('/api/confirm-payment', async (req, res) => {
     if (booking.status === 'paid' || booking.status === 'confirmed') {
       console.log('ConfirmPayment: idempotent - already paid', booking.booking_string_id || booking.id);
       return res.json({ success: true, message: 'Оплата уже подтверждена', bookingId: booking.booking_string_id || booking.id });
+    }
+
+    if (booking.status !== 'pending') {
+      console.log('ConfirmPayment: booking not in pending status', booking.status);
+      return res.status(400).json({ error: 'Бронирование не ожидает подтверждения', currentStatus: booking.status });
     }
 
     console.log('💳 Starting payment transaction...');
@@ -1567,43 +2035,103 @@ app.post('/api/confirm-payment', async (req, res) => {
     await db.query('COMMIT');
     console.log('✅ Payment transaction committed successfully');
 
-    // generate ticket (PDF or text)
+    // generate ticket using enhanced template system
     let ticket = null;
+    let publicPdfUrl = null;
     try {
       console.log('🎫 Generating ticket for booking:', updatedBooking.id);
-      const { generateTicketForBooking } = require('./ticket-utils');
+      const { generateTicketForBooking, uploadFileToSupabase } = require('./enhanced-ticket-utils');
       ticket = await generateTicketForBooking(updatedBooking);
       console.log('✅ Ticket generated successfully:', ticket);
+      
+      // Upload PDF to external storage
+      if (ticket && ticket.localPath) {
+        console.log('📤 Uploading ticket file to external storage...');
+        const pdfFileName = path.basename(ticket.localPath);
+        
+        try {
+          // Upload PDF
+          publicPdfUrl = await uploadFileToSupabase(ticket.localPath, `tickets/${pdfFileName}`);
+          console.log('✅ PDF uploaded to Supabase:', publicPdfUrl);
+          
+          // Update booking with public URL
+          await db.query('UPDATE bookings SET ticket_path = $1 WHERE id = $2', 
+            [publicPdfUrl, updatedBooking.id]);
+          
+        } catch (uploadError) {
+          console.error('❌ Failed to upload to Supabase:', uploadError);
+          // Fallback to production URL
+          const { buildPublicPdfUrl } = require('./enhanced-ticket-utils');
+          publicPdfUrl = buildPublicPdfUrl(ticket);
+          console.log('📎 Using production URL for PDF:', publicPdfUrl);
+        }
+      }
     } catch (e) {
       console.error('❌ Ticket generation error:', e);
     }
 
-    // send whatsapp via Green API or simulation
+    // send whatsapp via Green API with enhanced Russian text
     let whatsappResult = null;
     try {
       const phone = updatedBooking.user_phone || updatedBooking.phone;
       if (phone && /^\+\d{10,15}$/.test(phone)) {
         console.log('📱 Sending WhatsApp ticket to:', phone, 'ticket:', ticket?.ticketId);
-        const { sendWhatsAppTicket } = require('./ticket-utils');
-        whatsappResult = await sendWhatsAppTicket(phone, ticket || { ticketId: null, path: null });
+        
+        // Use public URL for Green API - ensure it's a valid URL
+        const baseUrl = process.env.PUBLIC_BASE_URL || 'https://upbeat-compassion-production.up.railway.app';
+        const pdfUrl = publicPdfUrl || (ticket && ticket.localPath ? `${baseUrl}${ticket.path}` : null);
+        
+        console.log('🔗 Ticket URL for WhatsApp:', { 
+          pdfUrl, 
+          ticket: ticket ? {
+            ticketId: ticket.ticketId,
+            localPath: ticket.localPath,
+            path: ticket.path
+          } : null
+        });
+        
+        const ticketForWhatsApp = {
+          ticketId: ticket?.ticketId || null,
+          pdfUrl: pdfUrl,
+          firstName: updatedBooking.first_name,
+          lastName: updatedBooking.last_name,
+          first_name: updatedBooking.first_name,
+          last_name: updatedBooking.last_name,
+          table: updatedBooking.table_number || updatedBooking.table,
+          seat: updatedBooking.seat_number || updatedBooking.seat
+        };
+        
+        // Call enhanced Green API to send Russian text and PDF
+        const { sendWhatsAppTicket } = require('./enhanced-ticket-utils');
+        whatsappResult = await sendWhatsAppTicket(phone, ticketForWhatsApp);
         
         if (whatsappResult.success) {
+          // Green API succeeded - update booking to paid
           await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, ticket_id = $2, updated_at = now() WHERE id=$3', 
-            [whatsappResult.textMessageId || whatsappResult.fileMessageId, ticket?.ticketId, updatedBooking.id]);
+            [whatsappResult.textMessageId || whatsappResult.pdfMessageId, ticket?.ticketId, updatedBooking.id]);
           console.log('✅ WhatsApp sent successfully:', {
             phone: phone,
             provider: whatsappResult.provider,
-            messageId: whatsappResult.textMessageId || whatsappResult.fileMessageId,
+            textMessageId: whatsappResult.textMessageId,
+            pdfMessageId: whatsappResult.pdfMessageId,
             ticketId: ticket?.ticketId
           });
         } else {
+          // Green API failed - set status to confirmation_failed
           console.error('❌ WhatsApp send failed:', whatsappResult.error);
-          // Still update ticket_id and mark as sent (simulated) even if WhatsApp fails
-          if (ticket?.ticketId) {
-            await db.query('UPDATE bookings SET ticket_id = $1, whatsapp_sent = true, whatsapp_message_id = $2, updated_at = now() WHERE id=$3', 
-              [ticket.ticketId, 'FAILED-' + Date.now(), updatedBooking.id]);
-            console.log('✅ Ticket ID saved and marked as sent (simulated) despite WhatsApp failure');
-          }
+          const errorDetails = JSON.stringify(whatsappResult.details || whatsappResult.error);
+          await db.query('UPDATE bookings SET status = $1, whatsapp_sent = false, whatsapp_message_id = $2, confirmation_error = $3, updated_at = now() WHERE id=$4', 
+            ['confirmation_failed', 'FAILED-' + Date.now(), errorDetails, updatedBooking.id]);
+          console.log('❌ Booking status set to confirmation_failed due to WhatsApp failure');
+          
+          // Return error to admin UI
+          return res.status(502).json({ 
+            success: false, 
+            message: 'Failed to send ticket via WhatsApp', 
+            error: whatsappResult.error,
+            details: whatsappResult.details,
+            bookingId: updatedBooking.booking_string_id || updatedBooking.id
+          });
         }
       } else {
         console.warn('⚠️ Invalid/missing phone, cannot send WhatsApp ticket', phone);
@@ -1628,10 +2156,14 @@ app.post('/api/confirm-payment', async (req, res) => {
 
     // emit real-time update
     try {
-      console.log('📡 Emitting bookingUpdated event...');
+      console.log('📡 Emitting booking:confirmed event...');
       if (io) {
-        io.emit('bookingUpdated', updatedBooking);
-        console.log('✅ bookingUpdated event emitted successfully');
+        io.emit('booking:confirmed', { 
+          seatId: updatedBooking.seat, 
+          status: 'paid',
+          bookingId: updatedBooking.booking_string_id || updatedBooking.id
+        });
+        console.log('✅ booking:confirmed event emitted successfully');
       } else {
         console.warn('⚠️ Socket.IO not available for real-time updates');
       }
@@ -1643,7 +2175,8 @@ app.post('/api/confirm-payment', async (req, res) => {
       success: true,
       message: 'Оплата подтверждена и билет отправлен в WhatsApp',
       ticketId: ticket && ticket.ticketId || null,
-      ticketPath: ticket && ticket.path || null
+      ticketPath: publicPdfUrl || (ticket && ticket.path) || null,
+      whatsappResult: whatsappResult
     });
   } catch (err) {
     try { await db.query('ROLLBACK'); } catch(e) {}
@@ -2306,7 +2839,7 @@ app.get('/api/secure-tickets/stats', (req, res) => {
 });
 
 // Get seat statuses for real-time updates
-app.get('/api/seat-statuses', (req, res) => {
+app.get('/api/seat-statuses', async (req, res) => {
     try {
         const seatStatuses = {};
         
@@ -2318,20 +2851,12 @@ app.get('/api/seat-statuses', (req, res) => {
             }
         }
         
-        // Load bookings from file
-        const bookingsPath = path.join(__dirname, 'bookings.json');
-        let bookings = {};
-        
-        if (fs.existsSync(bookingsPath)) {
-            bookings = JSON.parse(fs.readFileSync(bookingsPath, 'utf8'));
-        }
-        
-        // Get all bookings and their seat statuses
-        const allBookings = Object.values(bookings);
+        // Load bookings from database
+        const allBookings = await db.getSeatStatuses();
         
         allBookings.forEach(booking => {
-            if (booking.table && booking.seat && booking.status) {
-                const seatId = `${booking.table}-${booking.seat}`;
+            if (booking.table_number && booking.seat_number && booking.status) {
+                const seatId = `${booking.table_number}-${booking.seat_number}`;
                 let status = 'active'; // default
                 
                 if (booking.status === 'paid' || booking.status === 'confirmed' || booking.status === 'paid_ru') {
@@ -2341,15 +2866,11 @@ app.get('/api/seat-statuses', (req, res) => {
                 }
                 
                 seatStatuses[seatId] = status;
-                console.log(`📊 Server: Seat ${seatId} status set to ${status} (booking status: ${booking.status})`);
+                // Reduced logging for Railway production
             }
         });
         
-        console.log(`📊 Returning seat statuses: ${Object.keys(seatStatuses).length} seats`);
-        console.log(`📊 Status distribution:`, Object.values(seatStatuses).reduce((acc, status) => {
-            acc[status] = (acc[status] || 0) + 1;
-            return acc;
-        }, {}));
+        // Reduced logging for Railway production
         
         res.json({
             success: true,
@@ -2430,22 +2951,42 @@ app.post('/api/secure-tickets/add-manual', async (req, res) => {
     try {
         const ticketInfo = req.body;
         
+        // Validate required fields
         if (!ticketInfo.ticketId) {
             return res.status(400).json({ 
+                success: false,
                 error: 'Ticket ID is required' 
             });
         }
 
-        const newTicket = await secureTicketSystem.addTicketManually(ticketInfo);
+        if (!ticketInfo.bookingId) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Booking ID is required' 
+            });
+        }
+
+        // Validate ticket ID format (basic validation)
+        if (!/^[A-Z0-9]{8,}$/.test(ticketInfo.ticketId)) {
+            return res.status(400).json({ 
+                success: false,
+                error: 'Invalid ticket ID format. Must be at least 8 characters, letters and numbers only.' 
+            });
+        }
+
+        const ticketExists = secureTicketSystem.ticketExists(ticketInfo.ticketId);
+        const result = await secureTicketSystem.addTicketManually(ticketInfo);
         
         res.json({
             success: true,
-            message: 'Ticket added successfully',
-            data: newTicket
+            message: ticketExists ? 'Ticket updated successfully' : 'Ticket added successfully',
+            data: result,
+            isUpdate: ticketExists
         });
     } catch (error) {
         console.error('Error adding manual ticket:', error);
         res.status(500).json({ 
+            success: false,
             error: 'Failed to add manual ticket',
             details: error.message 
         });
@@ -2470,6 +3011,124 @@ app.get('/api/secure-tickets/exists/:ticketId', (req, res) => {
             details: error.message 
         });
     }
+});
+
+// Scan/use a ticket
+app.post('/api/secure-tickets/scan', async (req, res) => {
+    try {
+        const { ticketId, scannedBy = 'admin' } = req.body;
+        
+        if (!ticketId) {
+            return res.status(400).json({ 
+                error: 'Ticket ID is required' 
+            });
+        }
+
+        const result = await secureTicketSystem.scanTicket(ticketId, scannedBy);
+        
+        res.json({
+            success: true,
+            message: 'Ticket scanned successfully',
+            data: result
+        });
+    } catch (error) {
+        console.error('Error scanning ticket:', error);
+        res.status(500).json({ 
+            error: 'Failed to scan ticket',
+            details: error.message 
+        });
+    }
+});
+
+// Get ticket usage status
+app.get('/api/secure-tickets/usage-status/:ticketId', (req, res) => {
+    try {
+        const { ticketId } = req.params;
+        const usageStatus = secureTicketSystem.getTicketUsageStatus(ticketId);
+        
+        res.json({
+            success: true,
+            ticketId: ticketId,
+            usageStatus: usageStatus
+        });
+    } catch (error) {
+        console.error('Error getting ticket usage status:', error);
+        res.status(500).json({ 
+            error: 'Failed to get ticket usage status',
+            details: error.message 
+        });
+    }
+});
+
+// Get all tickets with usage status
+app.get('/api/secure-tickets/all', (req, res) => {
+    try {
+        const tickets = secureTicketSystem.getAllTickets();
+        const ticketsWithStatus = Object.keys(tickets).map(ticketId => ({
+            ...tickets[ticketId],
+            usageStatus: secureTicketSystem.getTicketUsageStatus(ticketId)
+        }));
+        
+        res.json({
+            success: true,
+            data: ticketsWithStatus
+        });
+    } catch (error) {
+        console.error('Error getting all tickets:', error);
+        res.status(500).json({ 
+            error: 'Failed to get tickets',
+            details: error.message 
+        });
+    }
+});
+
+// Socket.IO events for ticket management
+io.on('connection', (socket) => {
+    console.log('🔌 Client connected to ticket management:', socket.id);
+    
+    // Join admin room for ticket updates
+    socket.on('join-admin', () => {
+        socket.join('admins');
+        console.log('👤 Admin joined ticket management room');
+    });
+    
+    // Handle ticket scanning events
+    socket.on('scan-ticket', async (data) => {
+        try {
+            const { ticketId, scannedBy = 'admin' } = data;
+            const result = await secureTicketSystem.scanTicket(ticketId, scannedBy);
+            
+            // Emit to all admins
+            io.to('admins').emit('ticket-scanned', {
+                ticketId,
+                result,
+                timestamp: new Date().toISOString()
+            });
+            
+            console.log(`📡 Ticket scan event emitted for ${ticketId}`);
+        } catch (error) {
+            socket.emit('ticket-scan-error', {
+                error: error.message,
+                ticketId: data.ticketId
+            });
+        }
+    });
+    
+    // Handle ticket addition events
+    socket.on('ticket-added', (ticketData) => {
+        // Emit to all admins
+        io.to('admins').emit('ticket-updated', {
+            type: 'added',
+            ticket: ticketData,
+            timestamp: new Date().toISOString()
+        });
+        
+        console.log(`📡 Ticket addition event emitted for ${ticketData.ticketId}`);
+    });
+    
+    socket.on('disconnect', () => {
+        console.log('🔌 Client disconnected from ticket management:', socket.id);
+    });
 });
 
 // Test endpoint to manually trigger seat updates
@@ -2810,6 +3469,335 @@ server.on('error', (err) => {
         console.error('  3. Kill the process: taskkill /PID <pid> /F (Windows)');
     }
 });
+
+// Bulk confirmation endpoint - automatically send WhatsApp tickets for confirmed bookings
+app.post('/api/bulk-confirm-payments', async (req, res) => {
+  try {
+    console.log('🔄 Bulk confirmation request received');
+    
+    // Get all pending bookings
+    const pendingBookings = await db.query(`
+      SELECT * FROM bookings 
+      WHERE status = 'pending' 
+      AND user_phone IS NOT NULL
+      ORDER BY created_at ASC
+    `);
+    
+    if (pendingBookings.rows.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No pending bookings found',
+        processed: 0,
+        results: []
+      });
+    }
+    
+    console.log(`📋 Found ${pendingBookings.rows.length} pending bookings to process`);
+    
+    const results = [];
+    
+    for (const booking of pendingBookings.rows) {
+      try {
+        console.log(`🔄 Processing booking ${booking.booking_string_id || booking.id}...`);
+        
+        // Update booking status to paid
+        await db.query('UPDATE bookings SET status = $1, updated_at = now() WHERE id = $2', 
+          ['paid', booking.id]);
+        
+        // Generate ticket
+        const { generateTicketForBooking, uploadFileToSupabase, sendBothTicketFiles } = require('./ticket-utils');
+        const ticket = await generateTicketForBooking(booking);
+        
+        if (!ticket || !ticket.ticketId) {
+          console.error(`❌ Failed to generate ticket for booking ${booking.id}`);
+          results.push({
+            bookingId: booking.booking_string_id || booking.id,
+            success: false,
+            error: 'Failed to generate ticket'
+          });
+          continue;
+        }
+        
+        // Upload to external storage if available
+        let publicPdfUrl = null;
+        let publicImageUrl = null;
+        
+        if (ticket.localPath && ticket.imageLocalPath) {
+          try {
+            const pdfFileName = path.basename(ticket.localPath);
+            const imageFileName = path.basename(ticket.imageLocalPath);
+            
+            publicPdfUrl = await uploadFileToSupabase(ticket.localPath, `tickets/${pdfFileName}`);
+            publicImageUrl = await uploadFileToSupabase(ticket.imageLocalPath, `tickets/${imageFileName}`);
+            
+            // Update booking with public URLs
+            await db.query('UPDATE bookings SET ticket_path = $1, ticket_image_path = $2, ticket_id = $3 WHERE id = $4', 
+              [publicPdfUrl, publicImageUrl, ticket.ticketId, booking.id]);
+              
+            // Clean up temporary files
+            if (ticket.isTemp) {
+              if (fs.existsSync(ticket.localPath)) fs.unlinkSync(ticket.localPath);
+              if (fs.existsSync(ticket.imageLocalPath)) fs.unlinkSync(ticket.imageLocalPath);
+            }
+          } catch (uploadError) {
+            console.warn(`⚠️ Upload failed for booking ${booking.id}, using local URLs:`, uploadError.message);
+            // Fallback to local URLs
+            const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+            publicPdfUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}`;
+            publicImageUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.imageLocalPath)}`;
+          }
+        }
+        
+        // Send WhatsApp
+        const phone = booking.user_phone;
+        if (phone && /^\+\d{10,15}$/.test(phone)) {
+          const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+          const pdfUrl = publicPdfUrl || (ticket.localPath ? `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}` : null);
+          const imageUrl = publicImageUrl || (ticket.imageLocalPath ? `${baseUrl}/temp-tickets/${path.basename(ticket.imageLocalPath)}` : null);
+          
+          const ticketForWhatsApp = {
+            ticketId: ticket.ticketId,
+            pdfUrl: pdfUrl,
+            imageUrl: imageUrl
+          };
+          
+          const whatsappResult = await sendBothTicketFiles(phone, ticketForWhatsApp);
+          
+          if (whatsappResult.success) {
+            await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, updated_at = now() WHERE id = $2', 
+              [whatsappResult.imageMessageId || whatsappResult.pdfMessageId, booking.id]);
+            
+            console.log(`✅ WhatsApp sent for booking ${booking.booking_string_id || booking.id}:`, whatsappResult.pdfMessageId || whatsappResult.imageMessageId);
+            
+            results.push({
+              bookingId: booking.booking_string_id || booking.id,
+              success: true,
+              ticketId: ticket.ticketId,
+              whatsappMessageId: whatsappResult.pdfMessageId || whatsappResult.imageMessageId,
+              phone: phone
+            });
+          } else {
+            console.error(`❌ WhatsApp failed for booking ${booking.id}:`, whatsappResult.error);
+            await db.query('UPDATE bookings SET status = $1, confirmation_error = $2, updated_at = now() WHERE id = $3', 
+              ['confirmation_failed', JSON.stringify(whatsappResult.error), booking.id]);
+            
+            results.push({
+              bookingId: booking.booking_string_id || booking.id,
+              success: false,
+              error: whatsappResult.error
+            });
+          }
+        } else {
+          console.warn(`⚠️ Invalid phone for booking ${booking.id}: ${phone}`);
+          results.push({
+            bookingId: booking.booking_string_id || booking.id,
+            success: false,
+            error: 'Invalid phone number'
+          });
+        }
+        
+        // Small delay between processing bookings
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+      } catch (bookingError) {
+        console.error(`❌ Error processing booking ${booking.id}:`, bookingError);
+        results.push({
+          bookingId: booking.booking_string_id || booking.id,
+          success: false,
+          error: bookingError.message
+        });
+      }
+    }
+    
+    // Emit seat updates after bulk processing
+    emitSeatBulkUpdate();
+    
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+    
+    console.log(`✅ Bulk confirmation completed: ${successCount} successful, ${failureCount} failed`);
+    
+    res.json({
+      success: true,
+      message: `Bulk confirmation completed: ${successCount} successful, ${failureCount} failed`,
+      processed: results.length,
+      successful: successCount,
+      failed: failureCount,
+      results: results
+    });
+    
+  } catch (error) {
+    console.error('❌ Bulk confirmation error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Bulk confirmation failed',
+      error: error.message
+    });
+  }
+});
+
+// Send WhatsApp tickets for bookings that have ticketId but no WhatsApp sent
+app.post('/api/send-pending-tickets', async (req, res) => {
+  try {
+    console.log('📱 Sending pending tickets request received');
+    
+    // Get bookings that have ticketId but no WhatsApp sent
+    const pendingTickets = await db.query(`
+      SELECT * FROM bookings 
+      WHERE ticket_id IS NOT NULL 
+      AND (whatsapp_sent = false OR whatsapp_sent IS NULL)
+      AND user_phone IS NOT NULL
+      AND status = 'paid'
+      ORDER BY created_at ASC
+    `);
+    
+    if (pendingTickets.rows.length === 0) {
+      return res.json({
+        success: true,
+        message: 'No pending tickets found',
+        processed: 0,
+        results: []
+      });
+    }
+    
+    console.log(`📋 Found ${pendingTickets.rows.length} bookings with pending tickets`);
+    
+    const results = [];
+    
+    for (const booking of pendingTickets.rows) {
+      try {
+        console.log(`📱 Sending ticket for booking ${booking.booking_string_id || booking.id}...`);
+        
+        const phone = booking.user_phone;
+        if (!phone || !/^\+\d{10,15}$/.test(phone)) {
+          console.warn(`⚠️ Invalid phone for booking ${booking.id}: ${phone}`);
+          results.push({
+            bookingId: booking.booking_string_id || booking.id,
+            success: false,
+            error: 'Invalid phone number'
+          });
+          continue;
+        }
+        
+        // Use existing ticket paths or generate new ones
+        let pdfUrl = null;
+        let imageUrl = null;
+        
+        if (booking.ticket_path) {
+          pdfUrl = booking.ticket_path;
+        }
+        if (booking.ticket_image_path) {
+          imageUrl = booking.ticket_image_path;
+        }
+        
+        // If no URLs available, try to generate ticket
+        if (!pdfUrl && !imageUrl) {
+          console.log(`🎫 Generating new ticket for booking ${booking.id}...`);
+          const { generateTicketForBooking, uploadFileToSupabase } = require('./ticket-utils');
+          const ticket = await generateTicketForBooking(booking);
+          
+          if (ticket && ticket.ticketId) {
+            // Upload to external storage if available
+            if (ticket.localPath && ticket.imageLocalPath) {
+              try {
+                const pdfFileName = path.basename(ticket.localPath);
+                const imageFileName = path.basename(ticket.imageLocalPath);
+                
+                pdfUrl = await uploadFileToSupabase(ticket.localPath, `tickets/${pdfFileName}`);
+                imageUrl = await uploadFileToSupabase(ticket.imageLocalPath, `tickets/${imageFileName}`);
+                
+                // Update booking with public URLs
+                await db.query('UPDATE bookings SET ticket_path = $1, ticket_image_path = $2 WHERE id = $3', 
+                  [pdfUrl, imageUrl, booking.id]);
+                  
+                // Clean up temporary files
+                if (ticket.isTemp) {
+                  if (fs.existsSync(ticket.localPath)) fs.unlinkSync(ticket.localPath);
+                  if (fs.existsSync(ticket.imageLocalPath)) fs.unlinkSync(ticket.imageLocalPath);
+                }
+              } catch (uploadError) {
+                console.warn(`⚠️ Upload failed for booking ${booking.id}, using local URLs:`, uploadError.message);
+                // Fallback to local URLs
+                const baseUrl = process.env.PUBLIC_BASE_URL || 'http://localhost:3000';
+                pdfUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.localPath)}`;
+                imageUrl = `${baseUrl}/temp-tickets/${path.basename(ticket.imageLocalPath)}`;
+              }
+            }
+          }
+        }
+        
+        // Send WhatsApp
+        const { sendBothTicketFiles } = require('./ticket-utils');
+        const ticketForWhatsApp = {
+          ticketId: booking.ticket_id,
+          pdfUrl: pdfUrl,
+          imageUrl: imageUrl
+        };
+        
+        const whatsappResult = await sendBothTicketFiles(phone, ticketForWhatsApp);
+        
+        if (whatsappResult.success) {
+          await db.query('UPDATE bookings SET whatsapp_sent = true, whatsapp_message_id = $1, updated_at = now() WHERE id = $2', 
+            [whatsappResult.imageMessageId || whatsappResult.pdfMessageId, booking.id]);
+          
+          console.log(`✅ WhatsApp sent for booking ${booking.booking_string_id || booking.id}:`, whatsappResult.pdfMessageId || whatsappResult.imageMessageId);
+          
+          results.push({
+            bookingId: booking.booking_string_id || booking.id,
+            success: true,
+            ticketId: booking.ticket_id,
+            whatsappMessageId: whatsappResult.pdfMessageId || whatsappResult.imageMessageId,
+            phone: phone
+          });
+        } else {
+          console.error(`❌ WhatsApp failed for booking ${booking.id}:`, whatsappResult.error);
+          await db.query('UPDATE bookings SET confirmation_error = $1, updated_at = now() WHERE id = $2', 
+            [JSON.stringify(whatsappResult.error), booking.id]);
+          
+          results.push({
+            bookingId: booking.booking_string_id || booking.id,
+            success: false,
+            error: whatsappResult.error
+          });
+        }
+        
+        // Small delay between sending
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        
+      } catch (bookingError) {
+        console.error(`❌ Error sending ticket for booking ${booking.id}:`, bookingError);
+        results.push({
+          bookingId: booking.booking_string_id || booking.id,
+          success: false,
+          error: bookingError.message
+        });
+      }
+    }
+    
+    const successCount = results.filter(r => r.success).length;
+    const failureCount = results.filter(r => !r.success).length;
+    
+    console.log(`✅ Pending tickets sent: ${successCount} successful, ${failureCount} failed`);
+    
+    res.json({
+      success: true,
+      message: `Pending tickets sent: ${successCount} successful, ${failureCount} failed`,
+      processed: results.length,
+      successful: successCount,
+      failed: failureCount,
+      results: results
+    });
+    
+  } catch (error) {
+    console.error('❌ Send pending tickets error:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Send pending tickets failed',
+      error: error.message
+    });
+  }
+});
+
 // Graceful shutdown
 process.on('SIGINT', () => {
     console.log('\n🛑 Shutting down server gracefully...');
