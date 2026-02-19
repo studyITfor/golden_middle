@@ -1,0 +1,15 @@
+🎫 TICKET CONFIRMED 🎫
+
+Ticket ID: TEST123
+Booking ID: undefined
+Name: Асылбек Айтбаев
+Phone: undefined
+Table: 5
+Seat: 1
+Date: undefined
+Status: ✅ CONFIRMED & PAID
+
+This ticket is valid for entry to the event.
+Please present this ticket at the entrance.
+
+Thank you for your booking! 🎓
